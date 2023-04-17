@@ -1,0 +1,59 @@
+@font-face {
+  font-family: "BMDOHYEON";
+  src: url("/resources/font/BM/BMDOHYEON_ttf.ttf");
+}
+@font-face {
+  font-family: "BMHANNA11y";
+  src: url("/resources/font/BM/BMHANNA_11yrs_ttf.ttf");
+}
+@font-face {
+  font-family: "BMJUA";
+  src: url("/resources/font/BM/BMJUA_ttf.ttf");
+}
+@font-face {
+  font-family: "BMJUA";
+  src: url("/resources/font/BM/BMJUA_ttf.ttf");
+}
+
+.dohyeon{
+  font-family: "BMDOHYEON";
+}
+.font_size50{
+  font-size: 50px;
+
+}
+
+.hanna11y{
+  font-weight: 550;
+  font-family: "BMJUA";
+  font-size: 20px;
+  color: #707070;
+}
+
+.smalldohyeon{
+  display: block;
+  color: #707070;
+  font-family: "BMDOHYEON";
+  font-weight: 550;
+  float: left;
+}
+
+.NanumGothic{
+	font-family: 'NanumGothic';
+}
+
+.NanumSquareNeo{
+	font-family: 'NanumSquareNeo';
+}
+.NanumSquareRound{
+	font-family: 'NanumSquareRound';
+}
+.NanumSquareRoundBold{
+	font-family: 'NanumSquareRoundBold';
+	font-weight: 600;
+}
+
+.resume_title{
+ font-family: 'NanumGothicBold';
+    font-weight: 800;
+}

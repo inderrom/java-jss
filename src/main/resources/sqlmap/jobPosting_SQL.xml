@@ -1,0 +1,641 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.jopPosting.mapper.JobPostingMapper">
+
+
+	<sql id="where" >
+		<if test="selectJobList.containsKey('selectJobList')">
+			<foreach collection="#{selectJobList}" item="job">
+				AND RQR_JOB_NO= #{job.rqrJobNo}
+			</foreach>
+		</if>
+		<if test="selectJobList.containsKey('selectTagList')">
+			<foreach collection="selectTagList" item="tag">
+				AND JOB_PSTG_TAG_NO= #{tag.jobPstgTagNo}
+			</foreach>
+		</if>
+	</sql>
+
+	<sql id="jobGroup" >
+		<if test="memJobGroup.equals('DEVELOPER') ">
+					AND B.RQR_JOB_NO LIKE '%DEV%'
+		</if>
+		<if test="memJobGroup.equals('MANAGEMENT') ">
+					AND B.RQR_JOB_NO LIKE '%MAN%'
+		</if>
+		<if test="memJobGroup.equals('MARKETING') ">
+					AND B.RQR_JOB_NO LIKE '%MAR%'
+		</if>
+		<if test="memJobGroup.equals('DESIGN') ">
+					AND B.RQR_JOB_NO LIKE '%DES%'
+		</if>
+	</sql>
+
+	<!-- 채용공고 -->
+	<resultMap type="jobPostingVO" id="mapEntResult">
+	    <id property="jobPstgNo" column="JOB_PSTG_NO"/>
+	    <result property="entNo" column="ENT_NO"/>
+	    <result property="entNm" column="ENT_NM"/>
+	    <result property="jobPstgAprvYn" column="JOB_PSTG_APRV_YN"/>
+	    <result property="jobPstgBgngDt" column="JOB_PSTG_BGNG_DT"/>
+	    <result property="jobPstgEndDate" column="JOB_PSTG_END_DATE"/>
+	    <result property="jobPstgTitle" column="JOB_PSTG_TITLE"/>
+	    <result property="jobPstgContent" column="JOB_PSTG_CONTENT"/>
+	    <result property="jobPstgMainWork" column="JOB_PSTG_MAIN_WORK"/>
+	    <result property="jobPstgQlfc" column="JOB_PSTG_QLFC"/>
+	    <result property="jobPstgRpfntm" column="JOB_PSTG_RPFNTM"/>
+	    <result property="jobPstgBnf" column="JOB_PSTG_BNF"/>
+	    <result property="jobPstgPrize" column="JOB_PSTG_PRIZE"/>
+	    <collection property="attachmentList" resultMap="attachmentMap"></collection>
+	    <collection property="requireJobVOList" resultMap="requireJobMap"></collection>
+	    <collection property="jobPostingTagVOList" resultMap="jobPostingTagVOMap"></collection>
+	    <collection property="jobPostingSkillVOList" resultMap="jobPostingSkillVOMap"></collection>
+	</resultMap>
+
+	<!-- 첨부파일 -->
+	<resultMap type="attachmentVO" id="attachmentMap">
+		<result property="etpId" column="ETP_ID"/>
+		<result property="attNo" column="ATT_NO"/>
+		<result property="attClfcNo" column="ATT_CLFC_NO"/>
+		<result property="attPath" column="ATT_PATH"/>
+		<result property="attNm" column="ATT_NM"/>
+		<result property="attRegDt" column="ATT_REG_DT"/>
+	</resultMap>
+	<!-- 모집 분야 -->
+	<resultMap type="requireJobVO" id="requireJobMap">
+		<result property="rqrJobNo" column="RQR_JOB_NO"/>
+		<result property="jobPstgNo" column="JOB_PSTG_NO"/>
+		<result property="rqrJobNm" column="RQR_JOB_NM"/>
+	</resultMap>
+	<!-- 구인 공고 태그 -->
+	<resultMap type="jobPostingTagVO" id="jobPostingTagVOMap">
+		<result property="jobPstgTagNo" column="JOB_PSTG_TAG_NO"/>
+		<result property="jobPstgNo" column="JOB_PSTG_NO"/>
+		<result property="jobPstgTagNm" column="JOB_PSTG_TAG_NM"/>
+	</resultMap>
+	<!-- 구인 공고 스킬 -->
+	<resultMap type="jobPostingSkillVO" id="jobPostingSkillVOMap">
+		<result property="jobPstgSklNo" column="JOB_PSTG_SKL_NO"/>
+		<result property="jobPstgNo" column="JOB_PSTG_NO"/>
+		<result property="jobPstgSklNm" column="JOB_PSTG_SKL_NM"/>
+	</resultMap>
+
+	<!-- 조건 x 채용공고 조회 -->
+	<select id="getAllJobPost" parameterType="hashMap"  resultMap="mapEntResult">
+	SELECT *
+			FROM (
+			    SELECT ROWNUM AS RN, Q.*
+			    FROM (
+				    SELECT
+						b.JOB_PSTG_NO,
+						b.ENT_NO,
+						b.JOB_PSTG_APRV_YN,
+						TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+						TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+						b.JOB_PSTG_TITLE,
+						b.JOB_PSTG_CONTENT,
+						b.JOB_PSTG_MAIN_WORK,
+						b.JOB_PSTG_QLFC,
+						b.JOB_PSTG_RPFNTM,
+						b.JOB_PSTG_BNF,
+						b.JOB_PSTG_PRIZE,
+						c.ENT_NM
+					FROM
+						JOB_POSTING b
+					LEFT JOIN ENTERPRISE c ON
+						b.ENT_NO = c.ENT_NO
+					WHERE
+						1 = 1
+						<![CDATA[
+						AND b.JOB_PSTG_BGNG_DT <= SYSDATE
+						AND b.JOB_PSTG_END_DATE >= SYSDATE
+						]]>
+						AND b.JOB_PSTG_APRV_YN ='Y'
+
+				    ) Q
+			)
+			WHERE RN BETWEEN (#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND (#{mCurrentPage}*#{mSize})
+	</select>
+
+
+	<select id="getALLTotal" resultType="int" >
+			SELECT
+					COUNT(*)
+				FROM
+					JOB_POSTING
+				WHERE
+					JOB_PSTG_APRV_YN = 'Y'
+
+	</select>
+
+
+	<select id="getSearchTotal" resultType="int" >
+
+		SELECT COUNT(DISTINCT b.JOB_PSTG_NO)
+				FROM JOB_POSTING b
+				LEFT JOIN ENTERPRISE c ON b.ENT_NO=c.ENT_NO
+				LEFT JOIN ATTACHMENT d ON b.ENT_NO= d.ETP_ID
+				LEFT JOIN REQUIRE_JOB e ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+				LEFT JOIN JOB_POSTING_SKILL f ON b.JOB_PSTG_NO= f.JOB_PSTG_NO
+				LEFT JOIN JOB_POSTING_TAG g ON b.JOB_PSTG_NO= g.JOB_PSTG_NO
+				WHERE 1= 1
+				<![CDATA[
+				AND b.JOB_PSTG_BGNG_DT <= SYSDATE
+				AND b.JOB_PSTG_END_DATE >= SYSDATE
+				]]>
+				AND b.JOB_PSTG_APRV_YN ='Y'
+				<include refid="where" />
+
+				<!-- AND 	b.JOB_PSTG_APRV_YN = 'Y' 나중에 풀어 줘야함 -->
+
+	</select>
+
+	<!-- 기업 게시글 조회 -->
+	<select id="getSearchJobPost" parameterType="hashMap"  resultMap="mapEntResult">
+	SELECT *
+			FROM (
+			    SELECT ROWNUM AS RN, Q.*
+			    FROM (
+						SELECT DISTINCT
+							b.JOB_PSTG_NO,
+							b.ENT_NO,
+							c.ENT_NM,
+							b.JOB_PSTG_APRV_YN,
+							TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+							TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+							b.JOB_PSTG_TITLE,
+							b.JOB_PSTG_CONTENT,
+							b.JOB_PSTG_MAIN_WORK,
+							b.JOB_PSTG_QLFC,
+							b.JOB_PSTG_RPFNTM,
+							b.JOB_PSTG_BNF,
+							b.JOB_PSTG_PRIZE,
+							d.ATT_NO,
+							d.ATT_CLFC_NO,
+							d.ATT_PATH,
+							d.ATT_NM,
+							d.ATT_REG_DT,
+							e.RQR_JOB_NM,
+							e.RQR_JOB_NO,
+							f.JOB_PSTG_SKL_NO,
+							f.JOB_PSTG_SKL_NM,
+							g.JOB_PSTG_TAG_NO,
+							g.JOB_PSTG_TAG_NM
+							FROM JOB_POSTING b
+							LEFT JOIN ENTERPRISE c ON b.ENT_NO=c.ENT_NO
+							LEFT JOIN ATTACHMENT d ON b.ENT_NO= d.ETP_ID
+							LEFT JOIN REQUIRE_JOB e ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+							LEFT JOIN JOB_POSTING_SKILL f ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+							LEFT JOIN JOB_POSTING_TAG g ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+							WHERE 1 = 1
+							<![CDATA[
+							AND b.JOB_PSTG_BGNG_DT <= SYSDATE
+							AND b.JOB_PSTG_END_DATE >= SYSDATE
+							]]>
+							AND  ATT_CLFC_NO = 'ATTCL0002'
+							AND b.JOB_PSTG_APRV_YN ='Y'
+							ORDER BY 1
+				    ) Q
+			)
+			WHERE RN BETWEEN (#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND (#{mCurrentPage}*#{mSize})
+	</select>
+
+	<!-- 회원 정보 가져오기 -->
+	<select id="getloginMemVO" parameterType="String" resultType="memVO">
+		SELECT
+			MEM_ID,
+			MEM_PASS,
+			MEM_NM,
+			MEM_TELNO,
+			MEM_JOIN_DT,
+			MEM_DESCRIPTION,
+			MEM_PRVC_CLCT_AGRE_YN,
+			MEM_RLS_YN,
+			MEM_AUTH,
+			ENABLED,
+			MEM_JOB,
+			MEM_KAKAO_YN
+		FROM
+			MEM
+		WHERE MEM_ID = #{memId}
+	</select>
+	<!-- 회원의 선택한 직군 총 게시글 개수 -->
+	<select id="getTotalMemSelectedJobPosting" parameterType="String" resultType="int" >
+		SELECT
+			COUNT(DISTINCT A.JOB_PSTG_NO)
+		FROM JOB_POSTING A
+			LEFT JOIN REQUIRE_JOB B ON
+			A.JOB_PSTG_NO = B.JOB_PSTG_NO
+		WHERE 1 = 1
+		<![CDATA[
+		AND A.JOB_PSTG_BGNG_DT <= SYSDATE
+		AND A.JOB_PSTG_END_DATE >= SYSDATE
+		]]>
+		AND A.JOB_PSTG_APRV_YN ='Y'
+		<include refid="jobGroup"></include>
+
+	</select>
+
+	<!-- 회원의 게시글 가져오기 -->
+	<select id="getMemSelectedJobPosting" parameterType="hashMap" resultType="jobPostingVO">
+	SELECT *
+			FROM (
+			    SELECT ROWNUM AS RN, Q.*
+			    FROM (
+					SELECT DISTINCT
+						A.JOB_PSTG_NO,
+						A.ENT_NO,
+						C.ENT_NM,
+						A.JOB_PSTG_APRV_YN,
+						TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+						TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+						A.JOB_PSTG_TITLE,
+						A.JOB_PSTG_MAIN_WORK,
+						A.JOB_PSTG_QLFC,
+						A.JOB_PSTG_RPFNTM,
+						A.JOB_PSTG_BNF,
+						A.JOB_PSTG_PRIZE,
+						A.JOB_PSTG_CONTENT
+					FROM
+						JOB_POSTING A
+						LEFT JOIN REQUIRE_JOB B ON A.JOB_PSTG_NO = B.JOB_PSTG_NO
+						LEFT JOIN ENTERPRISE C ON A.ENT_NO = C.ENT_NO
+					WHERE 1=1
+					<![CDATA[
+					AND A.JOB_PSTG_BGNG_DT <= SYSDATE
+					AND A.JOB_PSTG_END_DATE >= SYSDATE
+					]]>
+					AND A.JOB_PSTG_APRV_YN ='Y'
+					<include refid="jobGroup"></include>
+			   ) Q
+					)
+					WHERE RN BETWEEN (#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND (#{mCurrentPage}*#{mSize})
+	</select>
+
+	<!-- 기업이미지하나 가져오기 -->
+	<select id="getOneEntImages" parameterType="String" resultType="AttachmentVO">
+			SELECT DISTINCT
+				a.ETP_ID,
+				a.ATT_NO,
+				a.ATT_CLFC_NO,
+				a.ATT_PATH,
+				a.ATT_NM,
+				a.ATT_REG_DT
+			FROM
+			JOB_POSTING b
+			LEFT JOIN ATTACHMENT a
+			ON
+			b.ENT_NO = a.ETP_ID
+			WHERE a.ETP_ID = #{entNo}
+			AND  a.ATT_CLFC_NO ='ATTCL0002'
+			ORDER BY
+				1
+	</select>
+
+	<!-- 조건X 총 채용공고 수 -->
+	<select id="getTotalJobPosting" resultType="int">
+		SELECT
+			COUNT(DISTINCT A.JOB_PSTG_NO)
+		FROM
+			JOB_POSTING A
+		WHERE 1 = 1
+		<![CDATA[
+		AND A.JOB_PSTG_BGNG_DT <= SYSDATE
+		AND A.JOB_PSTG_END_DATE >= SYSDATE
+		]]>
+		AND A.JOB_PSTG_APRV_YN ='Y'
+	</select>
+
+
+
+	<!-- 조건에 맞는 채용공고 번호 불러오기 -->
+	<select id="getConditionJobPosting" parameterType="hashMap" resultType="String">
+
+
+	<if test="selectTagList.size() != 0 and selectJobList.size() != 0">
+		SELECT JOB_PSTG_NO
+		FROM JOB_POSTING_TAG
+		WHERE
+        <if test="selectTagList != null and selectTagList.size() > 0">
+            JOB_PSTG_TAG_NO IN
+            <foreach item="tag" collection="selectTagList" open="(" separator="," close=")">
+                #{tag}
+            </foreach>
+        </if>
+		INTERSECT
+		SELECT JOB_PSTG_NO
+		FROM REQUIRE_JOB
+		WHERE
+		<if test="selectJobList != null and selectJobList.size() > 0">
+            RQR_JOB_NO IN
+            <foreach item="job" collection="selectJobList" open="(" separator="," close=")">
+                #{job}
+            </foreach>
+        </if>
+	</if>
+
+	<if test="selectTagList.size() != 0 and selectJobList.size() == 0">
+		SELECT JOB_PSTG_NO
+		FROM JOB_POSTING_TAG
+		WHERE
+        <if test="selectTagList != null and selectTagList.size() > 0">
+            JOB_PSTG_TAG_NO IN
+            <foreach item="tag" collection="selectTagList" open="(" separator="," close=")">
+                #{tag}
+            </foreach>
+        </if>
+	</if>
+
+	<if test="selectTagList.size() == 0 and selectJobList.size() != 0">
+		SELECT JOB_PSTG_NO
+		FROM REQUIRE_JOB
+		WHERE
+		<if test="selectJobList != null and selectJobList.size() > 0">
+            RQR_JOB_NO IN
+            <foreach item="job" collection="selectJobList" open="(" separator="," close=")">
+                #{job}
+            </foreach>
+        </if>
+	</if>
+	</select>
+
+	<!-- 조건시 채용공고 페이징가져오기 -->
+	<select id="getConditionJobPostingList" parameterType="hashMap" resultType="jobPostingVO">
+			SELECT *
+				FROM (
+				    SELECT ROWNUM AS RN, Q.*
+				    	FROM (
+								SELECT
+									JOB_PSTG_NO,
+									A.ENT_NO,
+									B.ENT_NM,
+									JOB_PSTG_APRV_YN,
+									TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+									TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+									JOB_PSTG_TITLE,
+									JOB_PSTG_CONTENT,
+									JOB_PSTG_MAIN_WORK,
+									JOB_PSTG_QLFC,
+									JOB_PSTG_RPFNTM,
+									JOB_PSTG_BNF,
+									JOB_PSTG_PRIZE
+								FROM
+									JOB_POSTING A
+									LEFT JOIN ENTERPRISE B ON A.ENT_NO = B.ENT_NO
+								WHERE JOB_PSTG_APRV_YN ='Y'
+								<if test="conditionJobposting != null || conditionJobposting.size() != 0">
+								AND JOB_PSTG_NO IN
+								<foreach item="jobPstgNo" collection="conditionJobposting" open="(" separator="," close=")">
+					                #{jobPstgNo}
+					            </foreach>
+								</if>
+				) Q
+			)
+			WHERE RN BETWEEN (#{single_content[1]}*#{single_content[0]})-(#{single_content[0]}-1) AND (#{single_content[1]}*#{single_content[0]})
+	</select>
+
+	<!-- 조건(직군 또는 x) 총 채용공고 리스트 total -->
+	<select id="getTotalNoConditionsJobPosting" parameterType="hashMap" resultType="int">
+		 SELECT
+			COUNT(DISTINCT A.JOB_PSTG_NO)
+		FROM
+			JOB_POSTING A
+		LEFT JOIN REQUIRE_JOB B ON
+			A.JOB_PSTG_NO = B.JOB_PSTG_NO
+		LEFT JOIN JOB_POSTING_SKILL C ON
+			A.JOB_PSTG_NO = C.JOB_PSTG_NO
+		LEFT JOIN JOB_POSTING_TAG D ON
+			A.JOB_PSTG_NO = D.JOB_PSTG_NO
+		WHERE 1 = 1
+			<![CDATA[
+			AND A.JOB_PSTG_BGNG_DT <= SYSDATE
+			AND A.JOB_PSTG_END_DATE >= SYSDATE
+			]]>
+			AND A.JOB_PSTG_APRV_YN ='Y'
+		<if test="single_content.get(2).equals('DEVELOPER') ">
+					AND B.RQR_JOB_NO LIKE '%DEV%'
+		</if>
+		<if test="single_content.get(2).equals('MANAGEMENT') ">
+					AND B.RQR_JOB_NO LIKE '%MAN%'
+		</if>
+		<if test="single_content.get(2).equals('MARKETING') ">
+					AND B.RQR_JOB_NO LIKE '%MAR%'
+		</if>
+		<if test="single_content.get(2).equals('DESIGN') ">
+					AND B.RQR_JOB_NO LIKE '%DES%'
+		</if>
+
+	</select>
+
+	<!--  조건(직군 또는 x) 페이징 채용공고 리스트  -->
+	<select id="getNoConditionsJobPosting" parameterType="hashMap" resultType="jobPostingVO" >
+		SELECT *
+				FROM (
+				    SELECT ROWNUM AS RN, Q.*
+				    	FROM (
+							SELECT DISTINCT
+								A.JOB_PSTG_NO,
+								A.ENT_NO,
+								E.ENT_NM,
+								A.JOB_PSTG_APRV_YN,
+								TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+								TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+								A.JOB_PSTG_TITLE,
+								A.JOB_PSTG_CONTENT,
+								A.JOB_PSTG_MAIN_WORK,
+								A.JOB_PSTG_QLFC,
+								A.JOB_PSTG_RPFNTM,
+								A.JOB_PSTG_BNF,
+								A.JOB_PSTG_PRIZE
+							FROM JOB_POSTING A
+								LEFT JOIN REQUIRE_JOB B ON
+									A.JOB_PSTG_NO = B.JOB_PSTG_NO
+								LEFT JOIN JOB_POSTING_SKILL C ON
+									A.JOB_PSTG_NO = C.JOB_PSTG_NO
+								LEFT JOIN JOB_POSTING_TAG D ON
+									A.JOB_PSTG_NO = D.JOB_PSTG_NO
+								LEFT JOIN ENTERPRISE E ON
+									A.ENT_NO = E.ENT_NO
+							WHERE 1 = 1
+								<if test="single_content.get(2).equals('DEVELOPER') ">
+									AND B.RQR_JOB_NO LIKE '%DEV%'
+								</if>
+								<if test="single_content.get(2).equals('MANAGEMENT') ">
+									AND B.RQR_JOB_NO LIKE '%MAN%'
+								</if>
+								<if test="single_content.get(2).equals('MARKETING') ">
+									AND B.RQR_JOB_NO LIKE '%MAR%'
+								</if>
+								<if test="single_content.get(2).equals('DESIGN') ">
+									AND B.RQR_JOB_NO LIKE '%DES%'
+								</if>
+								AND A.JOB_PSTG_APRV_YN ='Y'
+				) Q
+			)
+			WHERE RN BETWEEN (#{single_content[1]}*#{single_content[0]})-(#{single_content[0]}-1) AND (#{single_content[1]}*#{single_content[0]})
+	</select>
+
+	<!-- 채용공고의 북마크 가져오기 -->
+	<select id="getBookMark" parameterType="hashMap" resultType="String">
+		SELECT REC_BMK_YN
+		FROM RECORD
+		WHERE ETP_ID = #{jobPstgNo}
+		AND MEM_ID = #{userID}
+	</select>
+
+	<!-- 상세 채용공고를 위해 모든 정보 가져오기 -->
+	<select id="getDetailJobPosting" parameterType="String" resultMap="mapEntResult">
+			SELECT DISTINCT
+				b.JOB_PSTG_NO,
+				b.ENT_NO,
+				c.ENT_NM,
+				b.JOB_PSTG_APRV_YN,
+				TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+				TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+				b.JOB_PSTG_TITLE,
+				b.JOB_PSTG_CONTENT,
+				b.JOB_PSTG_MAIN_WORK,
+				b.JOB_PSTG_QLFC,
+				b.JOB_PSTG_RPFNTM,
+				b.JOB_PSTG_BNF,
+				b.JOB_PSTG_PRIZE,
+				d.ATT_NO,
+				d.ATT_CLFC_NO,
+				d.ATT_PATH,
+				d.ATT_NM,
+				d.ATT_REG_DT
+				FROM JOB_POSTING b
+				LEFT JOIN ENTERPRISE c ON b.ENT_NO=c.ENT_NO
+				LEFT JOIN ATTACHMENT d ON b.ENT_NO= d.ETP_ID
+				LEFT JOIN REQUIRE_JOB e ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+				LEFT JOIN JOB_POSTING_SKILL f ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+				LEFT JOIN JOB_POSTING_TAG g ON b.JOB_PSTG_NO= e.JOB_PSTG_NO
+				WHERE b.JOB_PSTG_NO = #{jobPstgNo}
+				AND  ATT_CLFC_NO = 'ATTCL0002'
+	</select>
+
+	<!-- 채용공고 태그 가져오기 -->
+	<select id="getTag" parameterType="String" resultType="jobPostingTagVO">
+		SELECT
+			JOB_PSTG_TAG_NO,
+			JOB_PSTG_NO,
+			JOB_PSTG_TAG_NM
+		FROM
+		JOB_POSTING_TAG
+		WHERE  JOB_PSTG_NO =#{jobPstgNo}
+	</select>
+	<!-- 채용공고 스킬 가져오기 -->
+	<select id="getSkill" parameterType="String" resultType="jobPostingSkillVO">
+		SELECT
+			JOB_PSTG_SKL_NO,
+			JOB_PSTG_NO,
+			JOB_PSTG_SKL_NM
+		FROM
+			JOB_POSTING_SKILL
+		WHERE  JOB_PSTG_NO =#{jobPstgNo}
+	</select>
+
+	<!-- 기업 번호로 회사정보 가져오기 -->
+	<select id="getEntInfo" parameterType="String" resultType="enterpriseVO">
+		SELECT
+			ENT_NO,
+			ENT_NM,
+			ENT_URL,
+			ENT_ZIP,
+			ENT_ADDR,
+			ENT_DADDR,
+			ENT_SLS_AMT,
+			ENT_SECTOR,
+			ENT_EMP_CNT,
+			ENT_FNDN_DT,
+			ENT_DESCRIPTION
+		FROM
+			ENTERPRISE
+		WHERE ENT_NO = #{entNo}
+	</select>
+
+	<select id="getLoginMemVO" parameterType="String" resultType="memVO">
+	SELECT	MEM_ID,
+			MEM_NM,
+			MEM_TELNO
+		FROM
+			MEM
+		WHERE MEM_ID = #{userID}
+	</select>
+
+	<select id="getAttachmentList" parameterType="String" resultType="attachmentVO">
+		SELECT
+			ATT_NM,
+			ATCH_NO
+		FROM
+			ATTACHMENT
+		WHERE ETP_ID = #{memId}
+		AND ATT_CLFC_NO = 'ATTCL0004'
+	</select>
+	<!-- 채용등록 -->
+	<insert id="signUpEmploy" parameterType="EmployStatusVO" >
+		<selectKey resultType="String" order="BEFORE" keyProperty="emplNo">
+				SELECT NVL(SUBSTR(MAX(EMPL_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(EMPL_NO), 5)+1,'0000')),'EMPL0001') FROM EMPLOY
+		</selectKey>
+		INSERT INTO EMPLOY
+		(EMPL_NO, JOB_PSTG_NO, RSM_NO, EMPL_BGNG_DT)
+		VALUES
+		(#{emplNo}, #{jobPstgNo}, #{rsmNo}, SYSDATE)
+
+	</insert>
+	<!-- 채용상태 등록 -->
+	<insert id="signUpEmployStatus">
+		<selectKey resultType="String" order="BEFORE" keyProperty="emplStsNo">
+				SELECT NVL(SUBSTR(MAX(EMPL_STS_NO), 1, 6) || TRIM(TO_CHAR(SUBSTR(MAX(EMPL_STS_NO), 7)+1,'0000')),'EMPLST0001') FROM EMPLOY_STATUS
+		</selectKey>
+			INSERT INTO EMPLOY_STATUS
+
+			<if test="attNo != null">
+				(EMPL_STS_NO, EMPL_NO, JOB_PSTG_NO, EMPL_CLFC_NO, RSM_NO, EMPL_STS_CHG_DT, ATT_NO)
+				VALUES
+				(#{emplStsNo}, #{emplNo}, #{jobPstgNo},'EMPSTS0002', #{rsmNo}, SYSDATE, #{attNo})
+			</if>
+
+			<if test="attNo == null">
+				(EMPL_STS_NO, EMPL_NO, JOB_PSTG_NO, EMPL_CLFC_NO, RSM_NO, EMPL_STS_CHG_DT)
+				VALUES
+				(#{emplStsNo}, #{emplNo}, #{jobPstgNo},'EMPSTS0002', #{rsmNo}, SYSDATE)
+			</if>
+	</insert>
+
+	<!-- 이력서로 memId 찾기 -->
+	<select id="getMemIdForResume" parameterType="String" resultType="memVO" >
+		SELECT
+			MEM_ID
+		FROM
+			RESUME
+		WHERE RSM_NO=#{rsmNo}
+	</select>
+
+	<!-- 회원이 지원한 이력서 체크 -->
+	<select id="getAllJobPostingResume" parameterType="hashMap" resultType="int">
+		SELECT  COUNT(C.RSM_NO)
+		FROM MEM A
+			JOIN RESUME B ON A.MEM_ID = B.MEM_ID
+			JOIN EMPLOY C ON B.RSM_NO = C.RSM_NO
+		WHERE A.MEM_ID = #{memId}
+		AND  C.JOB_PSTG_NO  = #{jobPstgNo}
+	</select>
+	
+	<select id="mainJobPostingRecomm" resultType="hashMap">
+		SELECT JP.JOB_PSTG_NO, ENT.ENT_NM, JP.JOB_PSTG_TITLE, JP.JOB_PSTG_BGNG_DT, JP.JOB_PSTG_END_DATE, JP.JOB_PSTG_PRIZE, JPTG.JOB_PSTG_TAG_NM, ATCH.ATT_NM
+		  FROM JOB_POSTING JP
+		  LEFT OUTER JOIN ENTERPRISE ENT ON (ENT.ENT_NO = JP.ENT_NO)
+		  LEFT OUTER JOIN JOB_POSTING_TAG JPTG ON (JPTG.JOB_PSTG_NO = JP.JOB_PSTG_NO)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = ENT.ENT_NO AND ATCH.ATT_CLFC_NO = 'ATTCL0002')
+		 WHERE JOB_PSTG_TAG_NM = (SELECT U.CMCD_DTL_NM
+		                            FROM (select ROWNUM AS RM, CMCD_DTL_NM from COMMON_CODE order by dbms_random.random()) U
+								   <![CDATA[
+		                           WHERE U.RM <= 80 AND U.RM >= 67
+		                           ]]>
+		                             AND ROWNUM = 1)
+	</select>
+	
+</mapper>

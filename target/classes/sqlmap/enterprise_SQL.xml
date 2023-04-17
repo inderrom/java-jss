@@ -1,0 +1,375 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.enterprise.mapper.EnterpriseMapper">
+
+	<!-- 기업회원여부 체크 -->
+	<select id="enterpriseCheck" parameterType="String" resultType="hashMap">
+		SELECT ET.ENT_NM, ET.ENT_ZIP, ET.ENT_NO, ET.ENT_DADDR, ET.ENT_ADDR, ET.ENT_URL, ET.ENT_EMP_CNT, ET.ENT_DESCRIPTION,
+			   TO_DATE(TO_CHAR(ET.ENT_FNDN_DT,'YYYY-MM-DD'),'YYYY-MM-DD') AS ENT_FNDN_DT, ET.ENT_SLS_AMT, ET.ENT_SECTOR,
+		       EM.MEM_ID, EM.ENT_MEM_JOIN_DT, EM.ENT_PIC_NM, EM.ENT_PIC_TELNO, EM.ENT_PIC_JBGD, EM.ENT_APRV_YN, EM.ENT_APRV_DT,
+		       ATCH.ATT_NM AS ENTPRSIMGS, ATT.ATT_NM AS ENTLOGOIMGS
+		  FROM ENTERPRISE_MEM EM
+		  LEFT OUTER JOIN ENTERPRISE ET ON (ET.ENT_NO = EM.ENT_NO)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON(ATCH.ETP_ID = ET.ENT_NO AND ATCH.ATT_CLFC_NO = 'ATTCL0002')
+		  LEFT OUTER JOIN ATTACHMENT ATT ON(ATT.ETP_ID = ET.ENT_NO AND ATT.ATT_CLFC_NO = 'ATTCL0003')
+		 WHERE MEM_ID = #{memId}
+	</select>
+
+	<!-- 기업회원 등록 -->
+	<insert id="enterpriseJoin" parameterType="enterpriseVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="entNo">
+			SELECT NVL(SUBSTR(MAX(ENT_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(ENT_NO), 4)+1,'0000')),'ENT0001') FROM ENTERPRISE
+		</selectKey>
+
+		INSERT INTO ENTERPRISE (ENT_NO, ENT_NM, ENT_URL, ENT_ZIP, ENT_ADDR, ENT_DADDR, ENT_SLS_AMT, ENT_SECTOR, ENT_EMP_CNT, ENT_FNDN_DT)
+		VALUES (#{entNo}, #{entNm}, #{entUrl}, #{entZip}, #{entAddr}, #{entDaddr}, #{entSlsAmt}, #{entSector}, #{entEmpCnt}, #{entFndnDt})
+	</insert>
+
+	<!-- 기업회원 등록시 멤버테이블과 연결 -->
+	<insert id="enterpriseMemInsert" parameterType="enterpriseMemVO">
+		INSERT INTO ENTERPRISE_MEM (ENT_NO, MEM_ID, ENT_MEM_JOIN_DT, ENT_APRV_YN, ENT_PIC_NM, ENT_PIC_TELNO, ENT_PIC_JBGD)
+		VALUES (#{entNo}, #{memId}, SYSDATE, 'N', #{entPicNm}, #{entPicTelno}, #{entPicJbgd})
+	</insert>
+
+	<!-- 기업회원 기본정보 수정 -->
+	<update id="enterpriseUpdate" parameterType="enterpriseVO">
+		UPDATE ENTERPRISE
+		   SET ENT_ZIP = #{entZip}, ENT_ADDR = #{entAddr}, ENT_DADDR = #{entDaddr}, ENT_SLS_AMT = #{entSlsAmt}, ENT_SECTOR = #{entSector},
+		       ENT_EMP_CNT = #{entEmpCnt}, ENT_FNDN_DT = #{entFndnDt}, ENT_DESCRIPTION = #{entDescription}
+		 WHERE ENT_NO = #{entNo}
+	</update>
+
+	<!-- 기업회원 담당자정보 수정 -->
+	<update id="enterpriseMemUpdate" parameterType="enterpriseMemVO">
+		UPDATE ENTERPRISE_MEM
+		   SET ENT_PIC_JBGD = #{entPicJbgd}, ENT_PIC_TELNO = #{entPicTelno}, ENT_PIC_NM = #{entPicNm}
+		 WHERE ENT_NO = #{entNo}
+	</update>
+
+	<!-- 기업회원 스킬정보 수정 -->
+	<insert id="entSkillUpdate" parameterType="hashMap">
+		 <foreach collection="hashMap" item="attachmentVO" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" " index="idx">
+			INTO ENTERPRISE_SKILL
+			(ENT_SKL_NO, ENT_NO, ENT_SKL_NM)
+			VALUES
+			( #{entSklNo}, #{entNo}, #{entSklNm} )
+		</foreach>
+	</insert>
+
+	<select id="getEntSkillList" parameterType="String" resultType="enterpriseSkillVO">
+		SELECT ES.ENT_SKL_NO, ES.ENT_NO, ES.ENT_SKL_NM
+		  FROM ENTERPRISE_SKILL ES
+		  LEFT OUTER JOIN ENTERPRISE_MEM EM ON(EM.ENT_NO = ES.ENT_NO)
+		 WHERE EM.MEM_ID = #{memId}
+	</select>
+
+	<!-- 기업 채용공고 가져오기 -->
+	<select id="jobPostingList" parameterType="hashMap" resultType="jobPostingVO">
+			SELECT *
+				FROM (
+				    SELECT ROWNUM AS RN, Q.*
+				    	FROM (
+							SELECT
+							JOB_PSTG_NO,
+								ENT_NO,
+								JOB_PSTG_APRV_YN,
+								TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+								TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+								JOB_PSTG_TITLE,
+								JOB_PSTG_CONTENT,
+								JOB_PSTG_MAIN_WORK,
+								JOB_PSTG_QLFC,
+								JOB_PSTG_RPFNTM,
+								JOB_PSTG_BNF,
+								JOB_PSTG_PRIZE
+							FROM
+								JOB_POSTING
+							WHERE ENT_NO = #{entNo}
+							ORDER BY
+								1 DESC
+				) Q
+			)
+			WHERE RN BETWEEN (#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND (#{mCurrentPage}*#{mSize})
+	</select>
+
+	<select id="getTotalJobPosting" parameterType="String" resultType="int">
+		SELECT
+			COUNT( JOB_PSTG_NO)
+		FROM
+			JOB_POSTING
+		WHERE ENT_NO = #{entNo}
+	</select>
+
+	<!--  공통코그 가져오기 -->
+	<select id="getCodeList" parameterType="String" resultType="commonCodeVO">
+		SELECT CMCD_CLFC, CMCD_DTL, CMCD_CLFC_NM, CMCD_DTL_NM, CMCD_USE_YN
+		FROM COMMON_CODE
+		WHERE CMCD_CLFC= #{code}
+	</select>
+
+	<!-- 새로운 채용공고 기본기 가져오기 -->
+	<select id="getjobPstgNo" resultType="String">
+		SELECT NVL(SUBSTR(MAX(JOB_PSTG_NO), 1,4) ||
+		TRIM(TO_CHAR(SUBSTR(MAX(JOB_PSTG_NO) , 5)+1,'0000')),'JPNG0001')
+		FROM JOB_POSTING
+	</select>
+
+	<!-- 채용공고 등록 -->
+	<insert id="jobPostingInsert" parameterType="jobPostingVO">
+		<selectKey resultType="String" order="AFTER" keyProperty="jobPstgNo">
+			SELECT NVL(SUBSTR(MAX(JOB_PSTG_NO), 1,4) || TRIM(TO_CHAR(SUBSTR(MAX(JOB_PSTG_NO) , 5)+1,'0000')),'JPNG0001')
+			  FROM JOB_POSTING
+		</selectKey>
+		MERGE INTO JOB_POSTING jp
+		USING DUAL
+		ON (jp.JOB_PSTG_NO = #{jobPstgNo})
+		WHEN MATCHED THEN
+		UPDATE SET
+		jp.JOB_PSTG_BGNG_DT = #{jobPstgBgngDt},
+		jp.JOB_PSTG_END_DATE = #{jobPstgEndDate},
+		jp.JOB_PSTG_TITLE = #{jobPstgTitle},
+		jp.JOB_PSTG_CONTENT = #{jobPstgContent},
+		jp.JOB_PSTG_MAIN_WORK = #{jobPstgMainWork},
+		jp.JOB_PSTG_QLFC = #{jobPstgQlfc},
+		jp.JOB_PSTG_RPFNTM = #{jobPstgRpfntm},
+		jp.JOB_PSTG_BNF = #{jobPstgBnf},
+		jp.JOB_PSTG_PRIZE = #{jobPstgPrize}
+		WHEN NOT MATCHED THEN
+		INSERT (
+		jp.JOB_PSTG_NO,
+		jp.ENT_NO,
+		jp.JOB_PSTG_APRV_YN,
+		jp.JOB_PSTG_BGNG_DT,
+		jp.JOB_PSTG_END_DATE,
+		jp.JOB_PSTG_TITLE,
+		jp.JOB_PSTG_CONTENT,
+		jp.JOB_PSTG_MAIN_WORK,
+		jp.JOB_PSTG_QLFC,
+		jp.JOB_PSTG_RPFNTM,
+		jp.JOB_PSTG_BNF,
+		jp.JOB_PSTG_PRIZE
+		) VALUES (
+		#{jobPstgNo},
+		#{entNo},
+		#{jobPstgAprvYn},
+		#{jobPstgBgngDt},
+		#{jobPstgEndDate},
+		#{jobPstgTitle},
+		#{jobPstgContent},
+		#{jobPstgMainWork},
+		#{jobPstgQlfc},
+		#{jobPstgRpfntm},
+		#{jobPstgBnf},
+		#{jobPstgPrize}
+		)
+	</insert>
+
+	<!-- 공통코드 가져오기 -->
+	<select id="getCommenCode" parameterType="String" resultType="commonCodeVO">
+		SELECT CMCD_CLFC,
+			   CMCD_DTL,
+			   CMCD_CLFC_NM,
+			   CMCD_DTL_NM,
+			   CMCD_USE_YN
+		FROM COMMON_CODE
+		WHERE CMCD_DTL = #{cmcdDtl}
+	</select>
+	<!-- 공통코드 직군 가져오기 -->
+	<select id="getselectJobGroup" parameterType="String" resultType="commonCodeVO">
+		SELECT CMCD_CLFC
+		FROM COMMON_CODE
+		WHERE CMCD_DTL = #{cmcdDtl}
+	</select>
+
+	<!-- 채용공고 태그 등록 -->
+	<update id="insertTagList" parameterType="list">
+		<foreach collection="list" item="JobPostingTagVO"
+			open="INSERT ALL" close="SELECT * FROM DUAL" separator=" ">
+			INTO
+			JOB_POSTING_TAG
+			(JOB_PSTG_TAG_NO, JOB_PSTG_NO, JOB_PSTG_TAG_NM)
+			VALUES
+			(#{JobPostingTagVO.jobPstgTagNo}, #{JobPostingTagVO.jobPstgNo}, #{JobPostingTagVO.jobPstgTagNm})
+		</foreach>
+	</update>
+
+	<!-- 채용공고 직무 등록 -->
+	<update id="insertJobList" parameterType="list">
+		<foreach collection="list" item="RequireJobVO"
+			open="INSERT ALL" close="SELECT * FROM DUAL" separator=" ">
+			INTO
+			REQUIRE_JOB
+			(RQR_JOB_NO, JOB_PSTG_NO, RQR_JOB_NM)
+			VALUES
+			(#{RequireJobVO.rqrJobNo}, #{RequireJobVO.jobPstgNo}, #{RequireJobVO.rqrJobNm})
+		</foreach>
+	</update>
+
+	<!-- 채용공고 스킬 등록 -->
+	<update id="insertSkillList" parameterType="list">
+		<foreach collection="list" item="JobPostingSkillVO"
+			open="INSERT ALL" close="SELECT * FROM DUAL" separator=" ">
+			INTO
+			JOB_POSTING_SKILL
+			(JOB_PSTG_SKL_NO, JOB_PSTG_NO, JOB_PSTG_SKL_NM)
+			VALUES
+			(#{JobPostingSkillVO.jobPstgSklNo}, #{JobPostingSkillVO.jobPstgNo}, #{JobPostingSkillVO.jobPstgSklNm})
+		</foreach>
+	</update>
+
+	<!-- 채용공고 태그 삭제 -->
+	<delete id="deleteByTagJobPstgNo" parameterType="String">
+		DELETE
+		FROM
+		JOB_POSTING_TAG
+		WHERE
+		JOB_PSTG_NO = #{jobPstgNo}
+	</delete>
+
+	<!-- 채용공고 스킬 삭제 -->
+	<delete id="deleteBySkillJobPstgNo" parameterType="String">
+		DELETE
+		FROM
+		JOB_POSTING_SKILL
+		WHERE
+		JOB_PSTG_NO = #{jobPstgNo}
+	</delete>
+
+	<!-- 채용공고 직무 삭제 -->
+	<delete id="deleteByJobJobPstgNo" parameterType="String">
+		DELETE
+		FROM
+		REQUIRE_JOB
+		WHERE
+		JOB_PSTG_NO = #{jobPstgNo}
+	</delete>
+
+	<!-- 채용공고 삭제 -->
+	<delete id="deleteJobPosting" parameterType="String">
+		DELETE
+		FROM
+		JOB_POSTING
+		WHERE
+		JOB_PSTG_NO = #{jobPstgNo}
+	</delete>
+
+	<!-- 상세 채용공고 -->
+	<select id="getDetailJobPosting" parameterType="String" resultType="jobPostingVO">
+		SELECT  JOB_PSTG_NO,
+				ENT_NO,
+				JOB_PSTG_APRV_YN,
+				TO_CHAR(JOB_PSTG_BGNG_DT, 'yyyy-MM-dd') JOB_PSTG_BGNG_DT,
+				TO_CHAR(JOB_PSTG_END_DATE, 'yyyy-MM-dd') JOB_PSTG_END_DATE,
+				JOB_PSTG_TITLE,
+				JOB_PSTG_CONTENT,
+				JOB_PSTG_MAIN_WORK,
+				JOB_PSTG_QLFC,
+				JOB_PSTG_RPFNTM,
+				JOB_PSTG_BNF,
+				JOB_PSTG_PRIZE
+		FROM JOB_POSTING
+		WHERE JOB_PSTG_NO= #{jobPstgNo}
+	</select>
+
+	<!-- 모든 공통코그 가져오기 -->
+	<select id="getAllCommonCodeList" resultType="commonCodeVO">
+		SELECT  CMCD_CLFC,
+				CMCD_DTL,
+				CMCD_CLFC_NM,
+				CMCD_DTL_NM,
+				CMCD_USE_YN
+		FROM COMMON_CODE
+
+	</select>
+
+	<!-- 채용공고 스킬 태그 가져오기 -->
+	<select id="getSkillList" parameterType="String" resultType="jobPostingSkillVO">
+		SELECT  JOB_PSTG_SKL_NO,
+				JOB_PSTG_NO,
+				JOB_PSTG_SKL_NM
+		FROM JOB_POSTING_SKILL
+		WHERE JOB_PSTG_NO = #{jobPstgNo}
+	</select>
+
+	<!-- 채용공고 추천 태그 가져오기 -->
+	<select id="getTagList" parameterType="String" resultType="jobPostingTagVO">
+		SELECT  JOB_PSTG_TAG_NO,
+				JOB_PSTG_NO,
+				JOB_PSTG_TAG_NM
+		FROM
+		JOB_POSTING_TAG
+		WHERE JOB_PSTG_NO = #{jobPstgNo}
+	</select>
+
+	<!-- 채용공고 직무 가져오기 -->
+	<select id="getJobList" parameterType="String" resultType="requireJobVO">
+		SELECT	RQR_JOB_NO,
+				JOB_PSTG_NO,
+				RQR_JOB_NM
+		FROM REQUIRE_JOB
+		WHERE JOB_PSTG_NO = #{jobPstgNo}
+	</select>
+
+	<!-- 일반회원 지원현황 목록조회 -->
+	<select id="getApplyList" parameterType="hashMap" resultType="hashMap">
+		SELECT ES.EMPL_STS_NO, ES.JOB_PSTG_NO, JP.JOB_PSTG_TITLE, ENT.ENT_NM, ES.EMPL_CLFC_NO, EY.EMPL_BGNG_DT, CC.CMCD_DTL_NM, ES.EMPL_STS_CHG_DT, ES.EMPL_NO, ES.RSM_NO, MM.MEM_ID, MM.MEM_NM, ES.ATT_NO
+		  FROM EMPLOY_STATUS ES
+		  LEFT OUTER JOIN EMPLOY EY ON(EY.EMPL_NO = ES.EMPL_NO)
+		  LEFT OUTER JOIN RESUME RS ON(RS.RSM_NO = ES.RSM_NO)
+		  LEFT OUTER JOIN MEM MM ON(MM.MEM_ID = RS.MEM_ID)
+		  LEFT OUTER JOIN COMMON_CODE CC ON(CC.CMCD_DTL = ES.EMPL_CLFC_NO)
+		  LEFT OUTER JOIN JOB_POSTING JP ON(JP.JOB_PSTG_NO = ES.JOB_PSTG_NO)
+		  LEFT OUTER JOIN ENTERPRISE ENT ON(ENT.ENT_NO = JP.ENT_NO)
+		  LEFT OUTER JOIN ENTERPRISE_MEM EM ON (EM.ENT_NO = JP.ENT_NO AND EM.MEM_ID = #{memId})
+		  WHERE (ES.RSM_NO, ES.EMPL_CLFC_NO) in (
+		    SELECT EST.RSM_NO, MAX(EST.EMPL_CLFC_NO) FROM EMPLOY_STATUS EST GROUP BY EST.RSM_NO
+		  )
+	</select>
+
+	<!-- 일반회원 지원 상태 변경 -->
+	<insert id="updateEmpState" parameterType="hashMap">
+		INSERT INTO EMPLOY_STATUS (EMPL_STS_NO, 
+		EMPL_NO, JOB_PSTG_NO, EMPL_CLFC_NO, RSM_NO, EMPL_STS_CHG_DT)
+		VALUES ( (SELECT NVL(SUBSTR(MAX(EMPL_STS_NO), 1, 6) || TRIM(TO_CHAR(SUBSTR(MAX(EMPL_STS_NO), 7)+1,'0000')),'EMPLST0001') FROM EMPLOY_STATUS),
+		#{emplno}, #{jobPstgNo}, #{emplClfcNo}, #{rsmNo}, SYSDATE)
+	</insert>
+	
+	<!-- 일반회원 지원 현황  -->
+	<select id="getEmployState" parameterType="hashMap" resultType="hashMap">
+		SELECT ES.EMPL_STS_NO, EY.EMPL_NO, ES.RSM_NO, MM.MEM_NM, MM.MEM_TELNO, MM.MEM_ID, ES.JOB_PSTG_NO, JP.JOB_PSTG_TITLE, EP.ENT_NO, EP.ENT_NM, ES.EMPL_CLFC_NO, CC.CMCD_DTL_NM, ES.EMPL_STS_CHG_DT
+		  FROM EMPLOY_STATUS ES, EMPLOY EY, COMMON_CODE CC, RESUME RS, MEM MM, JOB_POSTING JP, ENTERPRISE EP
+		 WHERE ES.EMPL_CLFC_NO = CC.CMCD_DTL
+		   AND EY.EMPL_NO = ES.EMPL_NO
+		   AND RS.RSM_NO = ES.RSM_NO
+		   AND MM.MEM_ID = RS.MEM_ID
+		   AND JP.JOB_PSTG_NO = ES.JOB_PSTG_NO
+		   AND EP.ENT_NO = JP.ENT_NO
+		   AND MM.MEM_ID = #{memId}
+		   AND ES.EMPL_CLFC_NO NOT LIKE 'EMPSTS0001'
+   		   AND JP.JOB_PSTG_NO = #{jobPstgNo}
+		 ORDER BY ES.EMPL_STS_CHG_DT
+	</select>	
+	
+	<!-- 기업 상세정보 -->
+	<select id="getEnterpriseDetail" parameterType="String" resultType="hashMap">
+		SELECT ET.ENT_NM, ET.ENT_ZIP, ET.ENT_NO, ET.ENT_DADDR, ET.ENT_ADDR, ET.ENT_URL, ET.ENT_EMP_CNT, ET.ENT_DESCRIPTION,
+			   TO_DATE(TO_CHAR(ET.ENT_FNDN_DT,'YYYY-MM-DD'),'YYYY-MM-DD') AS ENT_FNDN_DT, ET.ENT_SLS_AMT, ET.ENT_SECTOR,
+		       EM.MEM_ID, EM.ENT_MEM_JOIN_DT, EM.ENT_PIC_NM, EM.ENT_PIC_TELNO, EM.ENT_PIC_JBGD, EM.ENT_APRV_YN, EM.ENT_APRV_DT,
+		       ATCH.ATT_NM AS ENTPRSIMGS, ATT.ATT_NM AS ENTLOGOIMGS
+		  FROM ENTERPRISE_MEM EM
+		  LEFT OUTER JOIN ENTERPRISE ET ON (ET.ENT_NO = EM.ENT_NO)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON(ATCH.ETP_ID = ET.ENT_NO AND ATCH.ATT_CLFC_NO = 'ATTCL0002')
+		  LEFT OUTER JOIN ATTACHMENT ATT ON(ATT.ETP_ID = ET.ENT_NO AND ATT.ATT_CLFC_NO = 'ATTCL0003')
+		 WHERE EM.ENT_NO = #{entNo}
+	</select>
+
+	<!-- 기업 채용공고 태그 가져오기 -->
+	<select id="getEntAllTag" parameterType="String" resultType="String">
+		SELECT DISTINCT JPT.JOB_PSTG_TAG_NM
+		FROM JOB_POSTING_TAG JPT
+		INNER JOIN JOB_POSTING JP ON (JP.JOB_PSTG_NO = JPT.JOB_PSTG_NO)
+		WHERE JP.ENT_NO = #{entNo}
+	</select>
+</mapper>

@@ -1,0 +1,48 @@
+@charset "UTF-8";
+
+.left_position{
+	display: flex;
+    justify-content: flex-end;
+}
+
+.input_left_margin{
+	margin-left: 10px;
+}
+
+.img_icon{
+	height: 16px;
+	width: 16px;
+}
+.margin_top_3{
+	margin-top: 3px;
+}
+.float_r{
+	float: right;
+}
+.float_l{
+	float: left;
+}
+
+.top_b{
+	border-top: 1px solid #A4A4A4;
+}
+
+.btn_hi{
+	height: 38px;
+}
+.align_fe{
+align-items: flex-end;
+
+}
+
+.btn_lr{
+    margin-left: 1.5em;
+    margin-right: 1.5em;
+}
+.btn-tag-option{
+	width: auto;
+}
+
+textarea::-webkit-scrollbar {
+  display: none;
+}

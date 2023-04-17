@@ -1,0 +1,1604 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.admin.mapper.AdminMapper">
+	<sql id="where">
+		<if
+			test="searchType != null and searchType == 'name'
+			          and keyword != null and keyword != ''">
+			AND (MEM_NM LIKE '%' || #{keyword} || '%')
+		</if>
+
+		<if
+			test="searchType != null and searchType == 'id'
+			          and keyword != null and keyword != ''">
+			AND (MEM_ID LIKE '%' || #{keyword} || '%')
+		</if>
+	</sql>
+
+	<select id="getTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*) FROM MEM
+		WHERE MEM_AUTH IN ('ROLE_BLOCK', 'ROLE_NORMAL')
+		AND MEM_ID NOT IN (SELECT MEM_ID FROM ENTERPRISE_MEM)
+		<include refid="where"></include>
+	</select>
+
+	<select id="nomalList2" parameterType="hashMap" resultType="memVO">
+		WITH T AS(
+			SELECT ROW_NUMBER() OVER(ORDER BY MEM.MEM_NM) RNUM, ROWNUM NUM1, MEM.MEM_ID, MEM.MEM_AUTH, MEM.ENABLED
+			, SUBSTR(MEM.MEM_PASS,0,5)||REPLACE(SUBSTR(MEM.MEM_PASS,6,LENGTH(MEM.MEM_PASS)), SUBSTR(MEM.MEM_PASS,6,LENGTH(MEM.MEM_PASS)), '****') AS MEM_PASS
+			, MEM.MEM_NM, MEM.MEM_TELNO, MEM.MEM_JOIN_DT, MEM.MEM_DESCRIPTION, MEM.MEM_PRVC_CLCT_AGRE_YN, MEM.MEM_RLS_YN, VIP.VIP_GRD_NO
+			FROM MEM
+			LEFT OUTER JOIN VIP ON (VIP.MEM_ID = MEM.MEM_ID AND VIP.VIP_GRD_NO = 'VIPGRD0001')
+			WHERE MEM.MEM_AUTH IN ('ROLE_BLOCK', 'ROLE_NORMAL')
+			<include refid="where" />
+		)
+		SELECT T.RNUM
+				, T.MEM_ID
+				, T.MEM_PASS
+				, T.MEM_NM
+				, T.MEM_TELNO
+				, TO_CHAR(T.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+				, T.MEM_DESCRIPTION
+				, T.MEM_PRVC_CLCT_AGRE_YN
+				, T.MEM_RLS_YN
+				, T.MEM_AUTH
+				, T.ENABLED
+				, T.VIP_GRD_NO
+		FROM T
+		WHERE T.RNUM
+		BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1)
+		AND (#{currentPage}*#{size})
+	</select>
+
+	<select id="getMemDetail" parameterType="memVO"
+		resultType="memVO">
+		SELECT MEM_ID
+		, SUBSTR(MEM_PASS,0,5)||REPLACE(SUBSTR(MEM_PASS,6,LENGTH(MEM_PASS)), SUBSTR(MEM_PASS,6,LENGTH(MEM_PASS)), '****') AS MEM_PASS
+		, MEM_NM
+		, MEM_TELNO
+		, TO_CHAR(MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+		, MEM_DESCRIPTION
+		, MEM_PRVC_CLCT_AGRE_YN
+		, MEM_RLS_YN
+		, MEM_AUTH
+		, ENABLED
+		FROM MEM
+       WHERE MEM_ID = #{memId}
+	</select>
+
+	<resultMap type="memVO" id="memMap">
+		<result property="memId" column="MEM_ID" />
+		<result property="memNm" column="MEM_NM" />
+		<result property="memPass" column="MEM_PASS" />
+		<result property="memTelno" column="MEM_TELNO" />
+		<result property="memJoinDt" column="MEM_JOIN_DT" />
+		<result property="memDescription" column="MEM_DESCRIPTION" />
+		<result property="memPrvcClctAgreYn" column="MEM_PRVC_CLCT_AGRE_YN" />
+		<result property="memRlsYn" column="MEM_RLS_YN" />
+		<result property="memAuth" column="MEM_AUTH" />
+		<result property="enabled" column="ENABLED" />
+		<result property="rnum" column="RNUM" />
+		<result property="attNm" column="ATT_NM" />
+		<result property="crrYear" column="CRR_YEAR" />
+		<result property="vip" column="VIP" />
+		<result property="vipGrade" column="VIP_GRADE" />
+		<result property="vipGrdNm" column="VIP_GRD" />
+
+		<collection property="enterPriseList"
+			resultMap="enterpriseMap" />
+		<collection property="enterPriseMemList"
+			resultMap="enterPriseMemListMap" />
+		<collection property="memReportList" resultMap="reportMap" />
+		<collection property="reportClassList"
+			resultMap="reportClMap" />
+	</resultMap>
+
+
+	<select id="isVip" parameterType="memVO" resultMap="memMap">
+		SELECT M.MEM_ID
+		       , M.MEM_PASS
+		       , M.MEM_NM
+		       , M.MEM_TELNO
+		       , M.MEM_JOIN_DT
+		       , M.MEM_DESCRIPTION
+		       , M.MEM_PRVC_CLCT_AGRE_YN
+		       , M.MEM_RLS_YN
+		       , M.MEM_AUTH
+		       , M.ENABLED
+		       , M.MEM_JOB
+		       , CASE WHEN V.VIP_END_DT >= SYSDATE THEN '멤버십 결제중' ELSE '멤버십 미결제' END AS vip
+		       , V.VIP_GRD_NO AS VIP_GRADE
+		  FROM MEM M INNER JOIN (SELECT MEM_ID, VIP_END_DT, VIP_GRD_NO
+		                           FROM VIP
+		                        WHERE VIP_NO =
+		                            (SELECT MAX(VIP_NO)
+		                              FROM VIP
+		                             WHERE MEM_ID = #{memId}
+		                             GROUP BY MEM_ID)
+		                          ) V ON V.MEM_ID =  M.MEM_ID
+		             INNER JOIN VIP_GRADE VG ON VG.VIP_GRD_NO =  V.VIP_GRD_NO
+		 WHERE M.MEM_ID = #{memId}
+
+	</select>
+
+	<update id="blockMem" parameterType="memVO">
+		UPDATE MEM SET MEM_AUTH ='ROLE_BLOCK'
+		WHERE MEM_ID = #{memId}
+
+	</update>
+
+	<select id="getjobPostingList" parameterType="memVo" resultType="jobPostingVO">
+		SELECT M.MEM_ID, J.JOB_PSTG_NO, J.ENT_NO,
+		J.JOB_PSTG_APRV_YN
+		, TO_CHAR(J.JOB_PSTG_BGNG_DT,'yyyy/MM/dd') AS
+		"JOB_PSTG_BGNG_DT"
+		, TO_CHAR(J.JOB_PSTG_END_DATE, 'yyyy/MM/dd') AS
+		"JOB_PSTG_END_DATE"
+		, J.JOB_PSTG_TITLE, J.JOB_PSTG_CONTENT,
+		J.JOB_PSTG_MAIN_WORK
+		, J.JOB_PSTG_QLFC, J.JOB_PSTG_RPFNTM,
+		J.JOB_PSTG_BNF, J.JOB_PSTG_PRIZE
+		, ET.ENT_NM
+		FROM MEM M, RESUME R,
+		EMPLOY E, JOB_POSTING J, ENTERPRISE ET
+		WHERE M.MEM_ID = R.MEM_ID
+		AND
+		R.RSM_NO = E.RSM_NO
+		AND E.JOB_PSTG_NO = J.JOB_PSTG_NO
+		AND J.ENT_NO =
+		ET.ENT_NO
+		AND M.MEM_ID = #{memId}
+	</select>
+
+	<select id="getjobPostingList2" parameterType="hashMap" resultType="jobPostingVO">
+		SELECT *
+		FROM (
+			SELECT ROWNUM AS RN, Q.*
+			FROM (
+			SELECT
+			M.MEM_ID, J.JOB_PSTG_NO, J.ENT_NO, J.JOB_PSTG_APRV_YN,
+			TO_CHAR(J.JOB_PSTG_BGNG_DT,'yyyy/MM/dd') AS "JOB_PSTG_BGNG_DT",
+			TO_CHAR(J.JOB_PSTG_END_DATE, 'yyyy/MM/dd') AS "JOB_PSTG_END_DATE",
+			J.JOB_PSTG_TITLE, J.JOB_PSTG_CONTENT, J.JOB_PSTG_MAIN_WORK,
+			J.JOB_PSTG_QLFC, J.JOB_PSTG_RPFNTM, J.JOB_PSTG_BNF, J.JOB_PSTG_PRIZE,
+			ET.ENT_NM
+			FROM MEM M
+			INNER JOIN RESUME R ON M.MEM_ID = R.MEM_ID
+			INNER
+			JOIN EMPLOY E ON R.RSM_NO = E.RSM_NO
+			INNER JOIN JOB_POSTING J ON
+			E.JOB_PSTG_NO = J.JOB_PSTG_NO
+			INNER JOIN ENTERPRISE ET ON J.ENT_NO =
+			ET.ENT_NO
+			WHERE M.MEM_ID = #{memId}
+			ORDER BY J.JOB_PSTG_NO DESC
+			) Q
+			)
+		WHERE RN BETWEEN (#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND
+		(#{mCurrentPage}*#{mSize})
+	</select>
+
+	<select id="getMTotal" parameterType="memVO" resultType="int">
+		SELECT
+		COUNT(*)
+		FROM MEM M, RESUME R, EMPLOY E, JOB_POSTING J, ENTERPRISE ET
+		WHERE M.MEM_ID = R.MEM_ID
+		AND R.RSM_NO = E.RSM_NO
+		AND E.JOB_PSTG_NO =
+		J.JOB_PSTG_NO
+		AND J.ENT_NO = ET.ENT_NO
+		AND M.MEM_ID = #{memId}
+	</select>
+
+	<select id="blockList" parameterType="hashMap" resultType="memVO">
+		WITH T AS(
+		SELECT ROW_NUMBER() OVER(ORDER BY MEM_ID DESC) RNUM
+		, ROWNUM
+		NUM1
+		, MEM_ID
+		, MEM_PASS
+		, MEM_NM
+		, MEM_TELNO
+		, MEM_JOIN_DT
+		, MEM_DESCRIPTION
+		, MEM_PRVC_CLCT_AGRE_YN
+		, MEM_RLS_YN
+		, MEM_AUTH
+		, ENABLED
+		FROM MEM
+		WHERE 1 = 1
+		AND MEM_AUTH = 'ROLE_BLOCK'
+		AND MEM_ID NOT
+		IN (SELECT MEM_ID FROM ENTERPRISE_MEM)
+		<include refid="where"></include>
+		)
+		SELECT T.RNUM
+		, T.MEM_ID
+		, T.MEM_PASS
+		, T.MEM_NM
+		, T.MEM_TELNO
+		, TO_CHAR(T.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+		, T.MEM_DESCRIPTION
+		, T.MEM_PRVC_CLCT_AGRE_YN
+		, T.MEM_RLS_YN
+		, T.MEM_AUTH
+		, T.ENABLED
+		FROM T
+		WHERE T.RNUM
+		BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1)
+		AND (#{currentPage}*#{size})
+	</select>
+
+	<select id="getBlockTotal" parameterType="hashMap"
+		resultType="int">
+		SELECT COUNT(*) FROM MEM
+		WHERE 1 = 1
+		AND MEM_AUTH = 'ROLE_BLOCK'
+		AND
+		MEM_ID NOT IN (SELECT MEM_ID FROM ENTERPRISE_MEM)
+		<include refid="where"></include>
+	</select>
+
+	<update id="nonBlockMem" parameterType="memVO">
+		UPDATE MEM SET MEM_AUTH
+		='ROLE_NORMAL'
+		WHERE MEM_ID = #{memId}
+	</update>
+
+
+
+
+	<resultMap type="reportVO" id="reportMap">
+		<result property="rptClfcNo" column="RPT_CLFC_NO" />
+		<result property="rptRegDt" column="RPT_REG_DT" />
+		<result property="rptRsn" column="RPT_RSN" />
+	</resultMap>
+
+	<resultMap type="reportClassificationVO" id="reportClMap">
+		<result property="rptClfcNo" column="RPT_CLFC_NO" />
+		<result property="rptClfcNm" column="RPT_CLFC_NM" />
+		<result property="rptClfcUseYn" column="RPT_CLFC_USE_YN" />
+	</resultMap>
+
+	<select id="getBlockDetail" parameterType="memVO"
+		resultMap="memMap">
+		SELECT M.MEM_ID AS REPORTING
+		, M.MEM_NM
+		, R.RPT_CLFC_NO
+		,
+		TO_CHAR(R.RPT_REG_DT,'yyyy/MM/dd') AS RPT_REG_DT
+		, R.MEM_ID
+		, R.RPT_RSN
+		FROM MEM M, REPORT R
+		WHERE M.MEM_ID = R.ETP_ID
+		AND R.ETP_ID = #{memId}
+	</select>
+
+	<select id="reportTotal" parameterType="memVO" resultType="int">
+		SELECT COUNT(*)
+		  FROM MEM M, REPORT R, REPORT_CLASSIFICATION RC
+		 WHERE M.MEM_ID = R.ETP_ID
+		   AND R.RPT_CLFC_NO = RC.RPT_CLFC_NO
+		   AND R.ETP_ID = #{memId}
+	</select>
+
+	<select id="reportPage" parameterType="hashMap" resultMap="memMap">
+		SELECT U.*
+	    FROM (SELECT ROWNUM AS RNUM, A.*
+	            FROM (
+	                SELECT M.MEM_ID AS REPORTING
+	                     , M.MEM_NM
+	                     , RC.RPT_CLFC_NO
+	                     , RC.RPT_CLFC_NM
+	                     , TO_CHAR(R.RPT_REG_DT,'yyyy/MM/dd') AS RPT_REG_DT
+	                     , R.MEM_ID
+	                     , R.RPT_RSN
+	                  FROM MEM M, REPORT R, REPORT_CLASSIFICATION RC
+	                 WHERE M.MEM_ID = R.ETP_ID
+	                   AND R.RPT_CLFC_NO = RC.RPT_CLFC_NO
+	                   AND R.ETP_ID = #{memId}
+	            ) A
+	        ) U
+		WHERE U.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+	</select>
+
+
+
+	<resultMap type="EnterpriseVO" id="enterpriseMap">
+		<result property="entNo" column="ENT_NO" />
+		<result property="entNm" column="ENT_NM" />
+		<result property="entDescription" column="ENT_DESCRIPTION" />
+		<result property="entZip" column="ENT_ZIP" />
+		<result property="entAddr" column="ENT_ADDR" />
+		<result property="entDaddr" column="ENT_DADDR" />
+		<result property="entEmpCnt" column="ENT_EMP_CNT" />
+		<result property="entFndnDt" column="ENT_FNDN_DT" />
+		<result property="entSector" column="ENT_SECTOR" />
+		<result property="entSlsAmt" column="ENT_SLS_AMT" />
+		<result property="entUrl" column="ENT_URL" />
+	</resultMap>
+
+	<resultMap type="EnterpriseMemVO" id="enterPriseMemListMap">
+		<result property="entNo" column="ENT_NO" />
+		<result property="entMemJoinDt" column="ENT_MEM_JOIN_DT" />
+		<result property="entPicNm" column="ENT_PIC_NM" />
+		<result property="entPicTelno" column="ENT_PIC_TELNO" />
+		<result property="entPicJbgd" column="ENT_PIC_JBGD" />
+		<result property="entAprvYn" column="ENT_APRV_YN" />
+		<result property="entAprvDt" column="ENT_APRV_DT" />
+	</resultMap>
+
+
+	<sql id="where2">
+		<if
+			test="searchType != null and searchType == 'firmName'
+			          and keyword!=null and keyword!=''">
+			AND (E.ENT_NM LIKE '%' || #{keyword} || '%')
+		</if>
+
+		<if
+			test="searchType != null and searchType == 'firmId'
+			          and keyword!=null and keyword!=''">
+			AND (M.MEM_ID LIKE '%' || #{keyword} || '%')
+		</if>
+
+		<if
+			test="searchType != null and searchType == 'entPicNm'
+			          and keyword!=null and keyword!=''">
+			AND (EM.ENT_PIC_NM LIKE '%' || #{keyword} || '%')
+		</if>
+	</sql>
+
+	<select id="firmList" parameterType="hashMap" resultMap="memMap">
+		SELECT U.*
+		 FROM (
+		 	   SELECT ROWNUM AS RNUM, A.*
+				 FROM (
+				      	SELECT M.MEM_ID
+						        , TO_CHAR(M.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+						        , EM.ENT_MEM_JOIN_DT
+						        , EM.ENT_PIC_NM
+						        , EM.ENT_PIC_TELNO
+						        , EM.ENT_PIC_JBGD
+						        , EM.ENT_APRV_YN
+						        , EM.ENT_APRV_DT
+						        , E.ENT_NM
+						        , E.ENT_DESCRIPTION
+						        , E.ENT_ZIP
+						        , E.ENT_ADDR
+						        , E.ENT_DADDR
+						        , E.ENT_EMP_CNT
+						        , E.ENT_FNDN_DT
+						        , E.ENT_SECTOR
+					       FROM MEM M INNER JOIN ENTERPRISE_MEM EM ON EM.MEM_ID = M.MEM_ID
+					             INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+					       WHERE ENT_APRV_YN = 'Y'
+						              <include refid="where2"></include>
+						     ORDER BY M.MEM_ID ASC
+	     	  ) A
+		 ) U
+		 WHERE U.RNUM BETWEEN
+		 (#{currentPage}*#{size})-(#{size}-1) AND
+		 (#{currentPage}*#{size})
+	</select>
+
+	<select id="firmAllTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		  FROM MEM M INNER JOIN ENTERPRISE_MEM EM ON EM.MEM_ID = M.MEM_ID
+				   INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+         WHERE ENT_APRV_YN = 'Y'
+               <include refid="where2"></include>
+		 ORDER BY M.MEM_ID ASC
+	</select>
+
+	<select id="getFirmDetail" parameterType="memVO" resultMap="memMap">
+		SELECT M.MEM_ID, VG.VIP_GRD, M.MEM_NM, M.MEM_TELNO, TO_CHAR(M.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT", M.MEM_DESCRIPTION
+			   , M.MEM_PRVC_CLCT_AGRE_YN, M.MEM_RLS_YN, M.MEM_AUTH, M.ENABLED, M.MEM_JOB, EM.ENT_NO, EM.ENT_MEM_JOIN_DT, EM.ENT_PIC_NM
+			   , EM.ENT_PIC_TELNO, EM.ENT_PIC_JBGD, EM.ENT_APRV_YN, EM.ENT_APRV_DT, E.ENT_URL, E.ENT_NM, E.ENT_DESCRIPTION
+			   , E.ENT_ZIP, E.ENT_ADDR, E.ENT_DADDR, E.ENT_EMP_CNT, E.ENT_FNDN_DT, E.ENT_SECTOR, E.ENT_SLS_AMT
+		  FROM MEM M
+ 		  LEFT OUTER JOIN ENTERPRISE_MEM EM ON(EM.MEM_ID = M.MEM_ID)
+		  LEFT OUTER JOIN ENTERPRISE E ON(E.ENT_NO = EM.ENT_NO)
+		  LEFT OUTER JOIN VIP ON(VIP.MEM_ID = M.MEM_ID)
+		  LEFT OUTER JOIN VIP_GRADE VG ON(VG.VIP_GRD_NO = VIP.VIP_GRD_NO)
+		 WHERE M.MEM_AUTH = 'ROLE_ENTERPRISE'
+		   AND M.MEM_ID = #{memId}
+		 ORDER BY M.MEM_ID
+	</select>
+
+	<resultMap type="enterpriseVO" id="enterMap">
+		<result property="entNo" column="ENT_NO" />
+		<result property="entNm" column="ENT_NM" />
+		<result property="entDescription" column="ENT_DESCRIPTION" />
+		<result property="entUrl" column="ENT_URL" />
+		<result property="entZip" column="ENT_ZIP" />
+		<result property="entAddr" column="ENT_ADDR" />
+		<result property="entDaddr" column="ENT_DADDR" />
+		<result property="entSlsAmt" column="ENT_SLS_AMT" />
+		<result property="entSector" column="ENT_SECTOR" />
+		<result property="entEmpCnt" column="ENT_EMP_CNT" />
+		<result property="entFndnDt" column="ENT_FNDN_DT" />
+		<collection property="enterpriseMemVoList"
+			resultMap="enterMemMap"></collection>
+	</resultMap>
+
+	<resultMap type="enterpriseMemVO" id="enterMemMap">
+		<result property="memId" column="MEM_ID" />
+		<result property="entMemJoinDt" column="ENT_MEM_JOIN_DT" />
+		<result property="entPicNm" column="ENT_PIC_NM" />
+		<result property="entPicTelno" column="ENT_PIC_TELNO" />
+		<result property="entPicJbgd" column="ENT_PIC_JBGD" />
+		<result property="entAprvYn" column="ENT_APRV_YN" />
+		<result property="entAprvDt" column="ENT_APRV_DT" />
+	</resultMap>
+
+	<select id="getEnterPriceDetail" parameterType="enterpriseVO"
+		resultMap="enterMap">
+		SELECT E.ENT_NO AS ENT_NO
+		, E.ENT_NM AS ENT_NM
+		,
+		E.ENT_DESCRIPTION AS ENT_DESCRIPTION
+		, E.ENT_URL AS ENT_URL
+		, E.ENT_ZIP
+		AS ENT_ZIP
+		, E.ENT_ADDR AS ENT_ADDR
+		, E.ENT_DADDR AS ENT_DADDR
+		,
+		E.ENT_SLS_AMT AS ENT_SLS_AMT
+		, E.ENT_SECTOR AS ENT_SECTOR
+		,
+		E.ENT_EMP_CNT AS ENT_EMP_CNT
+		, E.ENT_FNDN_DT AS ENT_FNDN_DT
+		, EM.MEM_ID
+		AS MEM_ID
+		, EM.ENT_MEM_JOIN_DT AS ENT_MEM_JOIN_DT
+		, EM.ENT_PIC_NM AS
+		ENT_PIC_NM
+		, EM.ENT_PIC_TELNO AS ENT_PIC_TELNO
+		, EM.ENT_PIC_JBGD AS
+		ENT_PIC_JBGD
+		, EM.ENT_APRV_YN AS ENT_APRV_YN
+		, EM.ENT_APRV_DT AS
+		ENT_APRV_DT
+		FROM ENTERPRISE E
+		INNER JOIN
+		ENTERPRISE_MEM EM ON E.ENT_NO =
+		EM.ENT_NO
+		WHERE E.ENT_NO = #{entNo}
+	</select>
+
+	<select id="blockFirmList" parameterType="hashMap"
+		resultMap="memMap">
+		SELECT U.*
+		FROM (SELECT ROWNUM AS RNUM, A.*
+				FROM (
+					SELECT M.MEM_ID
+					, M.MEM_PASS
+					, TO_CHAR(M.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+					, EM.ENT_MEM_JOIN_DT
+					, EM.ENT_PIC_NM
+					, EM.ENT_PIC_TELNO
+					, EM.ENT_PIC_JBGD
+					, EM.ENT_APRV_YN
+					, EM.ENT_APRV_DT
+					, E.ENT_NM
+					, E.ENT_DESCRIPTION
+					, E.ENT_ZIP
+					, E.ENT_ADDR
+					, E.ENT_DADDR
+					, E.ENT_EMP_CNT
+					, E.ENT_FNDN_DT
+					, E.ENT_SECTOR
+
+					  FROM MEM M, ENTERPRISE_MEM EM, ENTERPRISE E
+					 WHERE M.MEM_ID = EM.MEM_ID
+					   AND EM.ENT_NO = E.ENT_NO
+					   AND M.MEM_AUTH = 'ROLE_BLOCK'
+					   <include refid="where2"></include>
+					 ORDER BY M.MEM_ID ASC
+				) A
+			) U
+		WHERE U.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+
+	</select>
+
+	<select id="blockFirmAllTotal" parameterType="hashMap"
+		resultType="int">
+		SELECT count(*)
+		FROM MEM M, ENTERPRISE_MEM EM, ENTERPRISE E
+		WHERE M.MEM_ID = EM.MEM_ID
+		AND EM.ENT_NO = E.ENT_NO
+		AND M.MEM_AUTH =
+		#{auth}
+		ORDER BY M.MEM_ID ASC
+	</select>
+
+	<select id="getBlockFirmDetail" parameterType="memVO"
+		resultMap="memMap">
+		SELECT M.MEM_ID
+		, M.MEM_PASS
+		, M.MEM_NM
+		, M.MEM_TELNO
+		, TO_CHAR(M.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+		, M.MEM_DESCRIPTION
+		, M.MEM_PRVC_CLCT_AGRE_YN
+		, M.MEM_RLS_YN
+		, M.MEM_AUTH
+		, M.ENABLED
+		, M.MEM_JOB
+		, EM.ENT_MEM_JOIN_DT
+		, EM.ENT_PIC_NM
+		, EM.ENT_PIC_TELNO
+		, EM.ENT_PIC_JBGD
+		, EM.ENT_APRV_YN
+		, EM.ENT_APRV_DT
+		, E.ENT_URL
+		, E.ENT_NM
+		, E.ENT_DESCRIPTION
+		, E.ENT_ZIP
+		, E.ENT_ADDR
+		, E.ENT_DADDR
+		, E.ENT_EMP_CNT
+		, E.ENT_FNDN_DT
+		, E.ENT_SECTOR
+		, E.ENT_SLS_AMT
+		FROM MEM M, ENTERPRISE_MEM EM, ENTERPRISE E
+		WHERE M.MEM_ID = EM.MEM_ID
+		AND EM.ENT_NO = E.ENT_NO
+		AND M.MEM_ID = #{memId}
+		ORDER BY M.MEM_ID ASC
+	</select>
+
+	<select id="permitRequestList" parameterType="hashMap"
+		resultMap="memMap">
+		SELECT U.*
+		 FROM (SELECT ROWNUM AS RNUM, A.*
+				 FROM (
+				      	SELECT M.MEM_ID
+						        , M.MEM_PASS
+						        , TO_CHAR(M.MEM_JOIN_DT,'yyyy/MM/dd') AS "MEM_JOIN_DT"
+						        , EM.ENT_MEM_JOIN_DT
+						        , EM.ENT_PIC_NM
+						        , EM.ENT_PIC_TELNO
+						        , EM.ENT_PIC_JBGD
+						        , EM.ENT_APRV_YN
+						        , EM.ENT_APRV_DT
+						        , E.ENT_NM
+						        , E.ENT_DESCRIPTION
+						        , E.ENT_ZIP
+						        , E.ENT_ADDR
+						        , E.ENT_DADDR
+						        , E.ENT_EMP_CNT
+						        , E.ENT_FNDN_DT
+						        , E.ENT_SECTOR
+					       FROM MEM M INNER JOIN ENTERPRISE_MEM EM ON EM.MEM_ID = M.MEM_ID
+					             INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+					       WHERE ENT_APRV_YN = 'N'
+						              <include refid="where2"></include>
+						     ORDER BY M.MEM_ID ASC
+	     	  ) A
+		 ) U
+		 WHERE U.RNUM BETWEEN
+		 (#{currentPage}*#{size})-(#{size}-1) AND
+		 (#{currentPage}*#{size})
+	</select>
+
+	<select id="allRequest" parameterType="hashMap" resultType="int">
+		SELECT count(*)
+		  FROM MEM M INNER JOIN ENTERPRISE_MEM EM ON EM.MEM_ID = M.MEM_ID
+				   INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+	     WHERE ENT_APRV_YN = 'N'
+               <include refid="where2"></include>
+         ORDER BY M.MEM_ID ASC
+	</select>
+
+	<update id="resolveBlockFirm" parameterType="memVO">
+		UPDATE MEM SET
+		MEM_AUTH ='ROLE_ENTERPRISE'
+		WHERE MEM_ID = #{memId}
+	</update>
+
+	<update id="permitFirm" parameterType="memVO">
+		UPDATE ENTERPRISE_MEM SET
+		ENT_APRV_YN ='Y'
+		WHERE MEM_ID = #{memId}
+	</update>
+
+	<select id="getPermitRg" parameterType="memVO" resultType="String">
+		SELECT ATT_NM
+		FROM ATTACHMENT
+		WHERE ETP_ID = #{entNo}
+		AND
+		ATT_CLFC_NO = 'ATTCL0001'
+	</select>
+
+	<sql id="whereIs">
+		<if
+			test="searchType != null and searchType == 'title'
+			          and keyword!=null and keyword!=''">
+			AND (BOARD.BOARD_TITLE LIKE '%' || #{keyword} || '%')
+		</if>
+
+		<if
+			test="searchType != null and searchType == 'id'
+			          and keyword!=null and keyword!=''">
+			AND (MEM.MEM_ID LIKE '%' || #{keyword} || '%')
+		</if>
+	</sql>
+
+	<select id="getBoardList" parameterType="hashMap"
+		resultType="boardVO">
+		WITH T AS (
+		SELECT ROW_NUMBER() OVER(ORDER BY BOARD_NO DESC) RNUM
+		, BOARD.BOARD_NO
+		, BOARD.BOARD_REG_DT
+		, BOARD.MEM_ID
+		, MEM.MEM_NM
+		, BOARD.BOARD_TITLE
+		, BOARD.BOARD_INQ_CNT
+		, BOARD.BOARD_CLFC_NO
+		, BOARD.BOARD_CONTENT
+		FROM BOARD, MEM
+		WHERE
+		BOARD.MEM_ID = MEM.MEM_ID
+		AND BOARD.BOARD_CLFC_NO = #{boardClfcNo}
+		<include refid="whereIs"></include>
+		) SELECT T.RNUM
+		, T.BOARD_NO
+		, T.BOARD_REG_DT
+		, T.MEM_ID
+		, T.MEM_NM
+		, T.BOARD_TITLE
+		, T.BOARD_INQ_CNT
+		, T.BOARD_CLFC_NO
+		, T.BOARD_CONTENT
+		FROM T
+		WHERE T.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+	</select>
+
+	<select id="boardTotal" parameterType="hashMap" resultType="int">
+		SELECT count(*)
+		FROM BOARD, MEM
+		WHERE BOARD.MEM_ID = MEM.MEM_ID
+		AND
+		BOARD.BOARD_CLFC_NO = #{boardClfcNo}
+		<include refid="whereIs"></include>
+	</select>
+
+	<resultMap type="boardVO" id="boardMap">
+		<result property="boardNo" column="BOARD_NO" />
+		<result property="boardContent" column="BOARD_CONTENT" />
+		<result property="boardClfcNo" column="BOARD_CLFC_NO" />
+		<result property="memId" column="BOARD_MEM_ID" />
+		<result property="boardTitle" column="BOARD_TITLE" />
+		<result property="boardInqCnt" column="BOARD_INQ_CNT" />
+		<result property="boardRegDt" column="BOARD_REG_DT" />
+		<collection property="boardCmntVOList" resultMap="boardCmntMap"></collection>
+	</resultMap>
+
+	<resultMap type="boardCommentVO" id="boardCmntMap">
+		<result property="cmntNo" column="CMNT_NO" />
+		<result property="boardNo" column="BOARD_NO" />
+		<result property="memId" column="COMMENT_MEM_ID" />
+		<result property="cmntContent" column="CMNT_CONTENT" />
+		<result property="cmntRegDt" column="CMNT_REG_DT" />
+		<result property="memNm" column="MEM_NM" />
+		<result property="attNm" column="ATT_NM" />
+	</resultMap>
+
+	<select id="boardDetail" parameterType="boardVO" resultMap="boardMap">
+		SELECT B.BOARD_NO
+		     , B.BOARD_CLFC_NO
+		     , B.MEM_ID AS BOARD_MEM_ID
+		     , B.BOARD_TITLE
+		     , B.BOARD_CONTENT
+		     , B.BOARD_INQ_CNT
+		     , B.BOARD_REG_DT
+		     , BC.CMNT_NO
+		     , BC.BOARD_NO
+		     , BC.MEM_ID
+		     , BC.CMNT_CONTENT
+		     , BC.CMNT_REG_DT
+		     , M.MEM_ID AS COMMENT_MEM_ID
+		     , M.MEM_NM
+		     , ATT.ATT_NM
+		    FROM BOARD B LEFT OUTER JOIN BOARD_COMMENT BC ON BC.BOARD_NO = B.BOARD_NO
+		                 LEFT OUTER JOIN MEM M ON M.MEM_ID = BC.MEM_ID
+		                 LEFT OUTER JOIN (SELECT ETP_ID, ATT_NM  FROM ATTACHMENT WHERE ATT_CLFC_NO = 'ATTCL0005') ATT ON ATT.ETP_ID = M.MEM_ID
+		WHERE B.BOARD_NO = #{boardNo}
+		ORDER BY BC.CMNT_NO
+	</select>
+
+	<insert id="insertContent" parameterType="hashMap">
+		INSERT INTO
+		BOARD(BOARD_NO
+		, BOARD_CLFC_NO
+		, MEM_ID
+		, BOARD_TITLE
+		, BOARD_CONTENT
+		,
+		BOARD_REG_DT)
+		VALUES ((SELECT 'BRD' ||
+		LPAD(NVL(TO_NUMBER(SUBSTR(MAX(BOARD_NO),4)), 0) +
+		1, 4, '0')
+		FROM BOARD)
+		, #{boardType}
+		, #{adminId}
+		, #{title}
+		, #{content}
+		, SYSDATE)
+	</insert>
+
+	<update id="modifyContent" parameterType="hashMap">
+		UPDATE BOARD
+		SET
+		BOARD_TITLE = #{title}
+		,BOARD_CONTENT = #{content}
+		WHERE BOARD_NO =
+		#{boardNo}
+	</update>
+
+	<delete id="boardDelete" parameterType="boardVO">
+		DELETE FROM BOARD
+		WHERE
+		BOARD_NO = #{boardNo}
+	</delete>
+
+	<delete id="commentDelete" parameterType="boardCommentVO">
+		DELETE FROM
+		BOARD_COMMENT
+		WHERE BOARD_NO = #{boardNo}
+	</delete>
+
+	<insert id="createCmt" parameterType="boardCommentVO">
+		INSERT
+		INTO
+		BOARD_COMMENT(CMNT_NO, BOARD_NO, MEM_ID, CMNT_CONTENT,
+		CMNT_REG_DT)
+		VALUES((SELECT 'CMNT' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(CMNT_NO),5)),
+		0) + 1, 4, '0')
+		FROM BOARD_COMMENT)
+		, #{boardNo}
+		, #{memId}
+		,
+		#{cmntContent}
+		,SYSDATE)
+	</insert>
+
+	<delete id="cmtOneDelet" parameterType="boardCommentVO">
+		DELETE FROM BOARD_COMMENT
+		WHERE CMNT_NO = #{cmntNo}
+	</delete>
+
+	<resultMap type="jobPostingVo" id="jobPostingMap">
+		<result property="rnum" column="RNUM"/>
+		<result property="jobPstgNo" column="JOB_PSTG_NO" />
+		<result property="entNo" column="ENT_NO" />
+		<result property="jobPstgAprvYn" column="JOB_PSTG_APRV_YN" />
+		<result property="jobPstgBgngDt" column="JOB_PSTG_BGNG_DT" />
+		<result property="jobPstgEndDate" column="JOB_PSTG_END_DATE" />
+		<result property="jobPstgTitle" column="JOB_PSTG_TITLE" />
+		<result property="jobPstgContent" column="JOB_PSTG_CONTENT" />
+		<result property="jobPstgMainWork" column="JOB_PSTG_MAIN_WORK" />
+		<result property="jobPstgQlfc" column="JOB_PSTG_QLFC" />
+		<result property="jobPstgRpfntm" column="JOB_PSTG_RPFNTM" />
+		<result property="jobPstgBnf" column="JOB_PSTG_BNF" />
+		<result property="jobPstgPrize" column="JOB_PSTG_PRIZE" />
+		<result property="entNm" column="ENT_NM" />
+		<collection property="jobPostingTagVOList" resultMap="tagMap"></collection>
+		<collection property="requireJobVOList" resultMap="reqMap"></collection>
+		<collection property="jobPostingSkillVOList" resultMap="skillMap"></collection>
+	</resultMap>
+
+	<resultMap type="JobPostingTagVO" id="tagMap">
+		<result property="jobPstgTagNo" column="JOB_PSTG_TAG_NO" />
+		<result property="jobPstgNo" column="JOB_PSTG_NO" />
+		<result property="jobPstgTagNm" column="JOB_PSTG_TAG_NM" />
+	</resultMap>
+
+	<resultMap type="RequireJobVO" id="reqMap">
+		<result property="rqrJobNo " column="RQR_JOB_NO " />
+		<result property="jobPstgNo" column="JOB_PSTG_NO" />
+		<result property="rqrJobNm " column="RQR_JOB_NM " />
+	</resultMap>
+
+	<resultMap type="JobPostingSkillVO" id="skillMap">
+		<result property="jobPstgSklNo" column="JOB_PSTG_SKL_NO" />
+		<result property="jobPstgNo    " column="JOB_PSTG_NO    " />
+		<result property="jobPstgSklNm" column="JOB_PSTG_SKL_NM" />
+	</resultMap>
+
+
+	<select id="getPosting" parameterType="jobPostingVo" resultMap="jobPostingMap">
+		SELECT JP.JOB_PSTG_NO
+				, JP.ENT_NO
+				, JP.JOB_PSTG_APRV_YN
+				, TO_CHAR(JP.JOB_PSTG_BGNG_DT, 'yyyy/MM/dd') AS JOB_PSTG_BGNG_DT
+				, TO_CHAR(JP.JOB_PSTG_END_DATE, 'yyyy/MM/dd') AS JOB_PSTG_END_DATE
+				, JP.JOB_PSTG_TITLE
+				, JP.JOB_PSTG_CONTENT
+				, JP.JOB_PSTG_MAIN_WORK
+				, JP.JOB_PSTG_QLFC
+				, JP.JOB_PSTG_RPFNTM
+				, JP.JOB_PSTG_BNF
+				, JP.JOB_PSTG_PRIZE
+				, E.ENT_NM
+				, JPT.JOB_PSTG_TAG_NM
+		FROM JOB_POSTING JP INNER JOIN ENTERPRISE E ON E.ENT_NO = JP.ENT_NO
+		                    LEFT OUTER JOIN JOB_POSTING_TAG JPT ON JPT.JOB_PSTG_NO = JP.JOB_PSTG_NO
+		WHERE
+		JP.JOB_PSTG_NO = #{jobPstgNo}
+	</select>
+
+	<sql id="reportWhere">
+		<if
+			test="searchType != null and searchType == 'name'
+			          and keyword != null and keyword != ''">
+			AND (M.MEM_NM LIKE '%' || #{keyword} || '%')
+		</if>
+		<if
+			test="searchType != null and searchType == 'rptRsn'
+			          and keyword != null and keyword != ''">
+			AND (R.RPT_RSN LIKE '%' || #{keyword} || '%')
+		</if>
+		<if
+			test="searchType != null and searchType == 'id'
+			          and keyword != null and keyword != ''">
+			AND (M.MEM_ID LIKE '%' || #{keyword} || '%')
+		</if>
+
+	</sql>
+
+
+	<resultMap      type="ReportVO"           id="report2Map">
+		<result     property="rnum"           column="RNUM"/>
+		<result     property="rptNo"          column="RPT_NO"/>
+		<result     property="rptClfcNo"      column="RPT_CLFC_NO"/>
+		<result     property="memId"          column="MEM_ID"/>
+		<result     property="rptRegDt"       column="RPT_REG_DT"/>
+		<result     property="etpId"          column="ETP_ID"/>
+		<result     property="rptPrcsYn"      column="RPT_PRCS_YN"/>
+		<result     property="rptPrcsDt"      column="RPT_PRCS_DT"/>
+		<result     property="rptPrcsPicNm"   column="RPT_PRCS_PIC_NM"/>
+		<result     property="rptRsn"         column="RPT_RSN"/>
+		<result     property="rptClfcNm"      column="RPT_CLFC_NM"/>
+		<collection property="reportingList"  resultMap="reportingMap"/>
+	</resultMap>
+
+	<resultMap  type="MemVO"                    id="reportingMap">
+		<result property="memId"                column="REP_MEM_ID"/>
+		<result property="memPass"              column="MEM_PASS"/>
+		<result property="memNm"                column="MEM_NM"/>
+		<result property="memTelno"             column="MEM_TELNO"/>
+		<result property="memJoinDt"            column="MEM_JOIN_DT"/>
+		<result property="memDescription"       column="MEM_DESCRIPTION"/>
+		<result property="memPrvcClctAgreYn"    column="MEM_PRVC_CLCT_AGRE_YN"/>
+		<result property="memRlsYn"             column="MEM_RLS_YN"/>
+		<result property="memAuth"              column="MEM_AUTH"/>
+		<result property="enabled"              column="ENABLED"/>
+		<result property="memJob"               column="MEM_JOB"/>
+	</resultMap>
+
+	<select id="getreportList" parameterType="hashMap" resultMap="report2Map">
+		SELECT U.*
+		 FROM (SELECT ROWNUM AS RNUM, A.*
+		 	     FROM (
+					SELECT R.MEM_ID AS MEM_ID
+					       , RC.RPT_CLFC_NM
+					       , R.RPT_RSN
+					       , R.RPT_NO
+					       , TO_CHAR(R.RPT_REG_DT,'yy-MM-dd') AS RPT_REG_DT
+					       , R.RPT_PRCS_DT
+					       , M.MEM_ID AS REP_MEM_ID
+					       , M.MEM_PASS
+					       , M.MEM_NM
+					       , M.MEM_TELNO
+					       , M.MEM_JOIN_DT
+					       , M.MEM_DESCRIPTION
+					       , M.MEM_PRVC_CLCT_AGRE_YN
+					       , M.MEM_RLS_YN
+					       , M.MEM_AUTH
+					       , M.ENABLED
+					       , M.MEM_JOB
+					  FROM MEM M
+					       INNER JOIN REPORT R ON R.ETP_ID = M.MEM_ID
+					       INNER JOIN REPORT_CLASSIFICATION RC ON RC.RPT_CLFC_NO = R.RPT_CLFC_NO
+					 WHERE 1 = 1
+					   AND R.RPT_PRCS_YN = 'N'
+					   AND R.ETP_ID IN (SELECT MEM_ID FROM MEM WHERE MEM_AUTH = #{auth})
+					   <include refid="reportWhere"></include>
+		 	     ) A
+		) U
+		WHERE U.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+
+	</select>
+
+	<select id="getReportTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		  FROM MEM M
+		       INNER JOIN REPORT R ON R.ETP_ID = M.MEM_ID
+		       INNER JOIN REPORT_CLASSIFICATION RC ON RC.RPT_CLFC_NO = R.RPT_CLFC_NO
+		 WHERE 1 = 1
+		   AND R.RPT_PRCS_YN = 'N'
+		   AND R.ETP_ID IN (SELECT MEM_ID FROM MEM WHERE MEM_AUTH = #{auth})
+		   <include refid="reportWhere"></include>
+
+	</select>
+
+	<update id="blockFinish" parameterType="String">
+		UPDATE REPORT SET RPT_PRCS_YN = 'Y', RPT_PRCS_DT = SYSDATE
+		 WHERE RPT_NO = #{rptNo}
+	</update>
+
+	<select id="getlectureTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		FROM PREMIUM P INNER JOIN LECTURE L ON L.PRMM_NO = P.PRMM_NO
+		          LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+		WHERE 1=1
+		  <include refid="lectureWhere"></include>
+		AND PRMM_CLFC = 'PRE0001'
+	</select>
+
+	<sql id="lectureWhere">
+		<if test="searchType != null and searchType == 'title'
+			          and keyword != null and keyword != ''">
+			AND (P.PRMM_TITLE LIKE '%' || #{keyword} || '%')
+		</if>
+		<if test="searchType != null and searchType == 'content'
+			          and keyword != null and keyword != ''">
+			AND (P.PRMM_CONTENT LIKE '%' || #{keyword} || '%')
+		</if>
+		<if test="isPermit != null and isPermit == 'permited' ">
+			AND I.ITNS_APRV_YN = 'Y'
+		</if>
+		<if test="isPermit != null and isPermit == 'noPermit' ">
+			AND I.ITNS_APRV_YN = 'N'
+		</if>
+
+	</sql>
+
+	<select id="getLectureList" parameterType="hashMap" resultType="LectureVO">
+		SELECT U.*
+		 FROM (SELECT ROWNUM AS RNUM, A.*
+		 	     FROM (
+					SELECT P.PRMM_NO
+					       , P.PRMM_TITLE
+					       , P.PRMM_REG_DT
+					       , P.PRMM_CLFC
+					       , P.PRMM_CONTENT
+					       , L.LCT_NO
+					       , L.LCT_DVSN
+					       , L.LCT_DT
+					       , L.LCT_INSTR_NM
+					       , ATT.ATCH_NO
+					       , ATT.ATT_NO
+					       , ATT.ATT_CLFC_NO
+					       , ATT.ATT_PATH
+					       , ATT.ATT_NM
+					       , ATT.ATT_REG_DT
+					FROM PREMIUM P INNER JOIN LECTURE L ON L.PRMM_NO = P.PRMM_NO
+						     LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+					WHERE 1=1
+						AND PRMM_CLFC = 'PRE0001'
+					   <include refid="lectureWhere"></include>
+					ORDER BY P.PRMM_NO DESC
+		 	     ) A
+		) U
+		WHERE U.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+	</select>
+
+
+	<resultMap type="LectureVO" id="LectureMap">
+		<result property="lctNo" column="LCT_NO"/>
+		<result property="prmmNo" column="PRMM_NO"/>
+		<result property="prmmTitle" column="PRMM_TITLE"/>
+		<result property="prmmContent" column="PRMM_CONTENT"/>
+		<result property="lctDvsn" column="LCT_DVSN"/>
+		<result property="lctDt" column="LCT_DT"/>
+		<result property="lctInstrNm" column="LCT_INSTR_NM"/>
+		<result property="bgPicture" column="PRMM_BG"/>
+		<collection property="lecSeriesList" resultMap="seriseMap"></collection>
+	</resultMap>
+
+	<resultMap type="LectureSeriesVO" id="seriseMap">
+		<result property="rownum" column="ROWNUM"/>
+		<result property="lctSrsNo" column="LCT_SRS_NO"/>
+		<result property="lctNo" column="LCT_NO"/>
+		<result property="prmmNo" column="PRMM_NO"/>
+		<result property="lctTitle" column="LCT_TITLE"/>
+		<result property="lctHr" column="LCT_HR"/>
+		<result property="lctSrsDegree" column="LCT_SRS_DEGREE"/>
+		<result property="attNm" column="ATT_NM"/>
+	</resultMap>
+
+	<select id="getLecturSerise" parameterType="String" resultMap="LectureMap">
+		SELECT P.PRMM_NO
+		       , P.PRMM_TITLE
+		       , P.PRMM_REG_DT
+		       , P.PRMM_CLFC
+		       , P.PRMM_CONTENT
+		       , ATT2.ATT_NM AS "PRMM_BG"
+		       , L.LCT_NO
+		       , L.PRMM_NO
+		       , L.PRMM_NO
+		       , L.LCT_DVSN
+		       , L.LCT_DT
+		       , L.LCT_INSTR_NM
+		       , LS.LCT_SRS_NO
+		       , LS.PRMM_NO
+		       , LS.LCT_TITLE
+		       , LS.LCT_HR
+		       , LS.LCT_SRS_DEGREE
+		       , ATT.ATT_NM
+		  FROM PREMIUM P INNER JOIN LECTURE L ON L.PRMM_NO = P.PRMM_NO
+		            LEFT OUTER JOIN ATTACHMENT ATT2 ON ATT2.ETP_ID = P.PRMM_NO
+		      	    LEFT OUTER JOIN LECTURE_SERIES LS ON LS.LCT_NO = L.LCT_NO
+		            LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = LS.LCT_SRS_NO
+		 WHERE L.LCT_NO = #{lctNo}
+		 ORDER BY LCT_SRS_DEGREE
+	</select>
+
+	<select id="goLecture" parameterType="lectureSeriesVo" resultType="String">
+		SELECT ATT.ATT_NM
+		  FROM LECTURE_SERIES LS INNER JOIN ATTACHMENT ATT ON ATT.ETP_ID = LS.LCT_SRS_NO
+		 WHERE LS.LCT_SRS_NO = #{lctSrsNo}
+	</select>
+
+
+	<update id="lectureModify" parameterType="String">
+		UPDATE LECTURE_SERIES SET LCT_TITLE = #{lctTitle},
+		                          LCT_HR = #{lctHr},
+		                          LCT_SRS_DEGREE = #{lctSrsDegree}
+		       WHERE LCT_SRS_NO = #{lctSrsNo}
+	</update>
+
+	<update id="updatePrmmTitle" parameterType="hashMap">
+		UPDATE PREMIUM SET PRMM_TITLE = #{title}
+		 WHERE PRMM_NO = #{prmmNo}
+	</update>
+
+	<update id="updateLctInstrNm" parameterType="hashMap">
+		UPDATE LECTURE SET LCT_INSTR_NM = #{lctInstrNm}
+		 WHERE LCT_NO = #{lctNo}
+	</update>
+
+	<update id="insertLectureSerise" parameterType="hashMap">
+		INSERT INTO LECTURE_SERIES(LCT_SRS_NO, LCT_NO, PRMM_NO, LCT_TITLE, LCT_SRS_DEGREE)
+                            VALUES ((SELECT 'LECSRS' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(LCT_SRS_NO),7)), 0) +1, 4, '0')
+                                   FROM LECTURE_SERIES), #{lctNo}, #{prmmNo}, #{title}, #{no})
+
+	</update>
+
+	<update id="insertAtt" parameterType="hashMap">
+		INSERT INTO ATTACHMENT(ATCH_NO
+					           , ATT_NO
+					           , ATT_CLFC_NO
+					           , ATT_PATH
+					           , ATT_NM
+					           , ATT_REG_DT
+					           , ETP_ID)
+					VALUES ((SELECT 'ATCH' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(ATCH_NO),5)), 0) +1, 4, '0')
+					        FROM ATTACHMENT)
+					        , #{prmmNo}
+					        , 'ATTCL0012'
+					        , 'YOUTUBE'
+					        , #{editordata}
+					        , SYSDATE
+					        , (SELECT 'LECSRS' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(LCT_SRS_NO),7)), 0), 4, '0')
+								FROM LECTURE_SERIES)
+					        )
+	</update>
+
+	<update id="updateLectureSerise" parameterType="hashMap">
+		UPDATE LECTURE_SERIES SET lct_srs_degree = #{no}, lct_title = #{title}
+		 WHERE lct_srs_no = #{frmLctSrsNo}
+	</update>
+
+	<update id="updateLectureAtt" parameterType="hashMap">
+		UPDATE ATTACHMENT SET ATT_NM = #{editData}
+		 WHERE ETP_ID = #{frmLctSrsNo}
+	</update>
+
+	<update id="deletePrmm" parameterType="String">
+		DELETE FROM PREMIUM WHERE PRMM_NO = #{prmmNo}
+	</update>
+
+	<update id="deleteLct" parameterType="String">
+		DELETE FROM LECTURE WHERE PRMM_NO = #{prmmNo}
+	</update>
+
+	<update id="deleteAtt" parameterType="String">
+		DELETE FROM ATTACHMENT WHERE ATT_NO = #{prmmNo}
+	</update>
+
+	<update id="deleteSrsAll" parameterType="String">
+		DELETE FROM LECTURE_SERIES WHERE PRMM_NO = #{prmmNo}
+	</update>
+
+	<insert id="insertPrmm" parameterType="premiumVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="prmmNo">
+			SELECT 'PRMM' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(PRMM_NO),5)), 0) +1, 4, '0') FROM PREMIUM
+		</selectKey>
+
+		INSERT INTO PREMIUM(PRMM_NO, PRMM_TITLE, PRMM_REG_DT, PRMM_CLFC, PRMM_CONTENT)
+	       VALUES (#{prmmNo}, #{prmmTitle}, SYSDATE, 'PRE0001', #{prmmContent}
+	       )
+	</insert>
+
+	<insert id="insertLct" parameterType="lectureVO">
+		INSERT INTO LECTURE(LCT_NO, PRMM_NO, LCT_DVSN, LCT_DT, LCT_INSTR_NM)
+           VALUES ( (SELECT 'LEC' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(LCT_NO),4)), 0) +1, 4, '0') FROM LECTURE)
+                 ,(SELECT MAX(PRMM_NO) FROM PREMIUM), 'PRE0001' ,SYSDATE ,#{lctInstrNm})
+
+	</insert>
+
+	<insert id="insertPrmmSpc" parameterType="premiumVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="prmmNo">
+			SELECT 'PRMM' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(PRMM_NO),5)), 0) +1, 4, '0') FROM PREMIUM
+		</selectKey>
+
+		INSERT INTO PREMIUM(PRMM_NO, PRMM_TITLE, PRMM_REG_DT, PRMM_CLFC, PRMM_CONTENT)
+	       VALUES (#{prmmNo}, #{prmmTitle}, SYSDATE, 'PRE0002', #{prmmContent}
+	       )
+	</insert>
+
+	<insert id="insertLctSpc" parameterType="lectureVO">
+		INSERT INTO LECTURE(LCT_NO, PRMM_NO, LCT_DVSN, LCT_DT, LCT_INSTR_NM)
+           VALUES ( (SELECT 'LEC' || LPAD(NVL(TO_NUMBER(SUBSTR(MAX(LCT_NO),4)), 0) +1, 4, '0') FROM LECTURE)
+                 ,(SELECT MAX(PRMM_NO) FROM PREMIUM), 'PRE0002' ,#{lctDt} ,#{lctInstrNm})
+
+	</insert>
+
+	<select id="getSpecialTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		FROM PREMIUM P INNER JOIN LECTURE L ON L.PRMM_NO = P.PRMM_NO
+		          LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+		WHERE 1=1
+		<include refid="lectureWhere"></include>
+		AND PRMM_CLFC = 'PRE0002'
+	</select>
+
+	<select id="getSpecialList" parameterType="hashMap" resultType="lectureVO">
+		SELECT U.*
+		 FROM (SELECT ROWNUM AS RNUM, A.*
+		 	     FROM (
+					SELECT P.PRMM_NO
+					       , P.PRMM_TITLE
+					       , P.PRMM_REG_DT
+					       , P.PRMM_CLFC
+					       , P.PRMM_CONTENT
+					       , L.LCT_NO
+					       , L.LCT_DVSN
+					       , L.LCT_DT
+					       , L.LCT_INSTR_NM
+					       , ATT.ATCH_NO
+					       , ATT.ATT_NO
+					       , ATT.ATT_CLFC_NO
+					       , ATT.ATT_PATH
+					       , ATT.ATT_NM
+					       , ATT.ATT_REG_DT
+					FROM PREMIUM P INNER JOIN LECTURE L ON L.PRMM_NO = P.PRMM_NO
+						     LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+					WHERE 1=1
+					   <include refid="lectureWhere"></include>
+						AND PRMM_CLFC = 'PRE0002'
+						ORDER BY P.PRMM_NO DESC
+		 	     ) A
+		) U
+		WHERE U.RNUM BETWEEN
+		(#{currentPage}*#{size})-(#{size}-1) AND
+		(#{currentPage}*#{size})
+	</select>
+
+	<select id="getIntershipTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		FROM INTERNSHIP I INNER JOIN PREMIUM P ON P.PRMM_NO = I.PRMM_NO
+		                  INNER JOIN ENTERPRISE E ON E.ENT_NO = I.ENT_NO
+		WHERE 1=1
+		 <include refid="lectureWhere"></include>
+		ORDER BY  P.PRMM_NO
+	</select>
+
+	<resultMap type="InternshipVO" id="InternshipMap">
+		<result property="itnsNo"              column="ITNS_NO"/>
+		<result property="entNo"               column="ENT_NO"/>
+		<result property="entNm"               column="ENT_NM"/>
+		<result property="prmmNo"              column="PRMM_NO"/>
+		<result property="prmmTitle"           column="PRMM_TITLE"/>
+		<result property="prmmContent"         column="PRMM_CONTENT"/>
+		<result property="itnsAprvYn"          column="ITNS_APRV_YN"/>
+		<result property="itnsEntrtNope"       column="ITNS_ENTRT_NOPE"/>
+		<result property="itnsBgngDt"          column="ITNS_BGNG_DT"/>
+		<result property="itnsEndDt"           column="ITNS_END_DT"/>
+		<result property="itnsCondition"       column="ITNS_CONDITION"/>
+		<result property="attNm"               column="ATT_NM"/>
+	    <collection property="itnsEntrtVOList" resultMap="itnsEntrtMap"/>
+	</resultMap>
+	<resultMap type="InternshipEntryantVO"    id="itnsEntrtMap">
+		<result property="itnsEntrtNo"        column="ITNS_ENTRT_NO"/>
+		<result property="itnsNo"             column="ITNS_NO"/>
+		<result property="memId"              column="MEM_ID"/>
+		<result property="itnsEntrtDt"        column="ITNS_ENTRT_DT"/>
+		<result property="itnsEntrtAprvYn"    column="ITNS_ENTRT_APRV_YN"/>
+		<collection property="memVo"          resultMap="memMap"/>
+	</resultMap>
+
+	<select id="getInsternshipList" parameterType="hashMap" resultMap="InternshipMap">
+		SELECT U.*
+			 FROM (
+			 		SELECT ROWNUM AS RNUM,
+	                      A.*
+			 	      FROM (
+							SELECT P.PRMM_NO
+						         , P.PRMM_TITLE
+						         , P.PRMM_REG_DT
+						         , P.PRMM_CLFC
+						         , P.PRMM_CONTENT
+						         , I.ITNS_NO
+						         , I.ENT_NO
+						         , I.ITNS_APRV_YN
+						         , I.ITNS_ENTRT_NOPE
+						         , I.ITNS_BGNG_DT
+						         , I.ITNS_END_DT
+						         , I.ITNS_CONDITION
+						         , E.ENT_NM
+						         , ATT.ATT_NM
+						    FROM INTERNSHIP I INNER JOIN PREMIUM P ON P.PRMM_NO = I.PRMM_NO
+						                      INNER JOIN ENTERPRISE E ON E.ENT_NO = I.ENT_NO
+						                 LEFT OUTER JOIN (SELECT * FROM ATTACHMENT WHERE ATT_CLFC_NO = 'ATTCL0002') ATT ON ATT.ETP_ID = E.ENT_NO
+						    WHERE 1=1
+						      <include refid="lectureWhere"></include>
+						    ORDER BY P.PRMM_NO DESC
+					) A
+				) U
+			WHERE U.RNUM BETWEEN
+			(#{currentPage}*#{size})-(#{size}-1) AND
+			(#{currentPage}*#{size})
+	</select>
+
+	<select id="internshipDetail" parameterType="String" resultMap="InternshipMap">
+
+		SELECT P.PRMM_NO
+	         , P.PRMM_TITLE
+	         , P.PRMM_REG_DT
+	         , P.PRMM_CLFC
+	         , P.PRMM_CONTENT
+	         , I.ITNS_NO
+	         , I.ENT_NO
+	         , I.ITNS_APRV_YN
+	         , I.ITNS_ENTRT_NOPE
+	         , I.ITNS_BGNG_DT
+	         , I.ITNS_END_DT
+	         , I.ITNS_CONDITION
+	         , E.ENT_NM
+	         , IEA.*
+	    FROM INTERNSHIP I INNER JOIN PREMIUM P ON P.PRMM_NO = I.PRMM_NO
+	                      INNER JOIN ENTERPRISE E ON E.ENT_NO = I.ENT_NO
+	                      LEFT OUTER JOIN (SELECT *
+	                                         FROM INTERNSHIP_ENTRYANT IE INNER JOIN MEM M ON M.MEM_ID = IE.MEM_ID
+	                                        WHERE ITNS_ENTRT_APRV_YN = 'Y' ) IEA ON IEA.ITNS_NO = I.ITNS_NO
+	    WHERE 1=1
+	    AND P.PRMM_NO = #{prmmNo}
+	    ORDER BY  P.PRMM_NO
+	</select>
+
+	<update id="noPermit" parameterType="String">
+		UPDATE INTERNSHIP SET ITNS_APRV_YN = 'N'
+ 		WHERE ITNS_NO = #{itnsNo}
+	</update>
+
+	<update id="permitInternship" parameterType="String">
+		UPDATE INTERNSHIP SET ITNS_APRV_YN = 'Y'
+ 		WHERE ITNS_NO = #{itnsNo}
+	</update>
+
+	<select id="internshipRequestList" parameterType="hashMap" resultMap="InternshipMap">
+		SELECT U.*
+			 FROM (
+			 		SELECT ROWNUM AS RNUM,
+	                      A.*
+			 	      FROM (
+							SELECT P.PRMM_NO
+						         , P.PRMM_TITLE
+						         , P.PRMM_REG_DT
+						         , P.PRMM_CLFC
+						         , P.PRMM_CONTENT
+						         , I.ITNS_NO
+						         , I.ENT_NO
+						         , I.ITNS_APRV_YN
+						         , I.ITNS_ENTRT_NOPE
+						         , I.ITNS_BGNG_DT
+						         , I.ITNS_END_DT
+						         , I.ITNS_CONDITION
+						         , E.ENT_NM
+						         , ATT.ATT_NM
+						    FROM INTERNSHIP I INNER JOIN PREMIUM P ON P.PRMM_NO = I.PRMM_NO
+						                      INNER JOIN ENTERPRISE E ON E.ENT_NO = I.ENT_NO
+						                      LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+						    WHERE 1=1
+						      AND ITNS_APRV_YN = 'N'
+						      <include refid="lectureWhere"></include>
+						    ORDER BY  P.PRMM_NO
+					) A
+				) U
+			WHERE U.RNUM BETWEEN
+			(#{currentPage}*#{size})-(#{size}-1) AND
+			(#{currentPage}*#{size})
+	</select>
+
+	<select id="internshipRequestTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+  	      FROM INTERNSHIP I INNER JOIN PREMIUM P ON P.PRMM_NO = I.PRMM_NO
+	                        INNER JOIN ENTERPRISE E ON E.ENT_NO = I.ENT_NO
+	                        LEFT OUTER JOIN ATTACHMENT ATT ON ATT.ETP_ID = P.PRMM_NO
+	     WHERE 1=1
+	       AND ITNS_APRV_YN = 'N'
+	       <include refid="lectureWhere"></include>
+	     ORDER BY  P.PRMM_NO
+	</select>
+
+	<select id="getMemProfile" parameterType="MemVO" resultType="AttachmentVO">
+		SELECT ATT_NM
+	   	  FROM ATTACHMENT
+		 WHERE ETP_ID = #{memId}
+		   AND ATT_CLFC_NO = 'ATTCL0005'
+	</select>
+
+	<delete id="deleteSrs" parameterType="String">
+		DELETE FROM LECTURE_SERIES
+		 WHERE LCT_SRS_NO = #{lctSrsNo}
+	</delete>
+
+	<select id="getFirmAttNm" parameterType="MemVO" resultType="AttachmentVO">
+		SELECT M.MEM_ID, E.ENT_NO , ATT.ATT_NM
+		  FROM MEM M INNER JOIN ENTERPRISE_MEM E ON E.MEM_ID = M.MEM_ID
+		           INNER JOIN ATTACHMENT ATT ON ATT.ETP_ID = E.ENT_NO
+		 WHERE M.MEM_ID = #{memId}
+		   AND ATT_CLFC_NO = 'ATTCL0002'
+	</select>
+
+	<select id = "getjobPostedList" parameterType="hashMap" resultMap="jobPostingMap">
+		SELECT U.*
+			 FROM (
+			 		SELECT ROWNUM AS RNUM,
+	                      A.*
+			 	      FROM (
+							SELECT       E.ENT_NO
+								       , JP.JOB_PSTG_NO
+								       , JP.JOB_PSTG_APRV_YN
+								       , TO_CHAR(JP.JOB_PSTG_BGNG_DT, 'yyyy/MM/dd') AS JOB_PSTG_BGNG_DT
+								       , TO_CHAR(JP.JOB_PSTG_END_DATE, 'yyyy/MM/dd') AS JOB_PSTG_END_DATE
+								       , JP.JOB_PSTG_TITLE
+								       , JP.JOB_PSTG_MAIN_WORK
+								       , JP.JOB_PSTG_QLFC
+								       , JP.JOB_PSTG_RPFNTM
+								       , JP.JOB_PSTG_BNF
+								       , JP.JOB_PSTG_PRIZE
+								       , JP.JOB_PSTG_CONTENT
+
+							FROM ENTERPRISE_MEM EM INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+                                                   INNER JOIN JOB_POSTING JP ON JP.ENT_NO = E.ENT_NO
+
+							WHERE EM.MEM_ID = #{memId}
+							ORDER BY JP.JOB_PSTG_NO
+						) A
+				) U
+			WHERE U.RNUM BETWEEN
+			(#{mCurrentPage}*#{mSize})-(#{mSize}-1) AND
+			(#{mCurrentPage}*#{mSize})
+	</select>
+
+	<select id="postedTotal" parameterType="EnterpriseMemVO" resultType="int">
+		SELECT COUNT(*)
+
+			FROM ENTERPRISE_MEM EM INNER JOIN ENTERPRISE E ON E.ENT_NO = EM.ENT_NO
+			                       LEFT OUTER JOIN JOB_POSTING JP ON JP.ENT_NO = E.ENT_NO
+
+			WHERE EM.MEM_ID = #{memId}
+			ORDER BY JP.JOB_PSTG_NO
+	</select>
+
+	<select id="jobPostedTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		  FROM JOB_POSTING
+		  where 1=1
+		  <include refid="jobPostWhere"></include>
+	</select>
+
+	<sql id="jobPostWhere">
+		<if
+			test="searchType != null and searchType == 'title'
+			          and keyword != null and keyword != ''">
+			AND (JOB_PSTG_TITLE LIKE '%' || #{keyword} || '%')
+		</if>
+		<if
+			test="searchType != null and searchType == 'entNm'
+			          and keyword != null and keyword != ''">
+			AND (ENT_NM LIKE '%' || #{keyword} || '%')
+		</if>
+
+		<if test="ispermit !=null and ispermit == 'permit'">
+			AND JOB_PSTG_APRV_YN = 'Y'
+		</if>
+		<if test="ispermit !=null and ispermit == 'noPermit'">
+			AND JOB_PSTG_APRV_YN = 'N'
+		</if>
+
+
+
+	</sql>
+
+
+
+	<select id="getjobPostList" parameterType="hashMap" resultMap="jobPostingMap">
+		SELECT U.*
+			 FROM (
+			 		SELECT ROWNUM AS RNUM,
+	                      A.*
+			 	      FROM (
+							SELECT  JOB_PSTG_NO
+							      , JOB_PSTG_APRV_YN
+							      , TO_CHAR(JOB_PSTG_BGNG_DT,'yyyy/MM/dd') as "JOB_PSTG_BGNG_DT"
+							      , TO_CHAR(JOB_PSTG_END_DATE,'yyyy/MM/dd') as "JOB_PSTG_END_DATE"
+							      , JOB_PSTG_TITLE
+							      , JOB_PSTG_MAIN_WORK
+							      , JOB_PSTG_QLFC
+							      , JOB_PSTG_RPFNTM
+							      , JOB_PSTG_BNF
+							      , JOB_PSTG_PRIZE
+							      , JOB_PSTG_CONTENT
+							      , ENT_NM
+							      , ENT_URL
+							      , ENT_ZIP
+							      , ENT_ADDR
+							      , ENT_DADDR
+							      , ENT_SLS_AMT
+							      , ENT_SECTOR
+							      , ENT_EMP_CNT
+							      , ENT_FNDN_DT
+							      , ENT_DESCRIPTION
+							FROM JOB_POSTING J INNER JOIN ENTERPRISE E ON E.ENT_NO = J.ENT_NO
+							WHERE 1 = 1
+							<include refid="jobPostWhere"></include>
+							ORDER BY JOB_PSTG_NO DESC
+					) A
+				) U
+			WHERE U.RNUM BETWEEN
+			(#{currentPage}*#{size})-(#{size}-1) AND
+			(#{currentPage}*#{size})
+	</select>
+
+	<update id="permitJobpost" parameterType="JobPostingVO">
+		UPDATE JOB_POSTING SET JOB_PSTG_APRV_YN = 'Y'
+		 WHERE JOB_PSTG_NO = #{jobPstgNo}
+	</update>
+
+	<update id="noPermitJobpost" parameterType="JobPostingVO">
+		UPDATE JOB_POSTING SET JOB_PSTG_APRV_YN = 'N'
+		 WHERE JOB_PSTG_NO = #{jobPstgNo}
+	</update>
+
+	<resultMap type="ReportVO" id="reportMap2">
+		<result property="rnum" column="RNUM"/>
+		<result property="rptNo" column="RPT_NO"/>
+		<result property="rptClfcNo" column="RPT_CLFC_NO"/>
+		<result property="memId" column="mem_id"/>
+		<result property="rptRegDt" column="rpt_reg_dt"/>
+		<result property="etpId" column="ETP_ID"/>
+		<result property="rptRsn" column="RPT_RSN"/>
+		<result property="rptPrcsYn" column="RPT_PRCS_YN"/>
+		<result property="rptPrcsPicNm" column="RPT_PRCS_PIC_NM"/>
+		<result property="rptPrcsDt" column="RPT_PRCS_DT"/>
+		<collection property="boardVo" resultMap="boardMap"/>
+		<collection property="memVo" resultMap="memMap"/>
+	</resultMap>
+
+
+	<sql id="reportWhereBoard">
+		<if
+			test="searchType != null and searchType == 'content'
+			          and keyword != null and keyword != ''">
+			AND (R.RPT_RSN LIKE '%' || #{keyword} || '%')
+		</if>
+		<if
+			test="searchType != null and searchType == 'title'
+			          and keyword != null and keyword != ''">
+			AND (B.BOARD_TITLE LIKE '%' || #{keyword} || '%')
+		</if>
+	</sql>
+
+	<select id="reportBoardTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*)
+		  FROM REPORT R LEFT OUTER JOIN BOARD B ON B.BOARD_NO = R.ETP_ID
+		                INNER JOIN MEM M ON M.MEM_ID = R.MEM_ID
+		  WHERE R.RPT_CLFC_NO = 'RPTCL0002'
+		  <include refid="reportWhereBoard"></include>
+	</select>
+
+	<select id="reportBoardList" parameterType="hashMap" resultMap="reportMap2">
+		SELECT U.*
+			 FROM (
+			 		SELECT ROWNUM AS RNUM,
+	                      A.*
+			 	      FROM (
+							SELECT    R.RPT_NO
+									, R.RPT_CLFC_NO
+									, R.MEM_ID
+									, TO_CHAR(R.RPT_REG_DT, 'yyyy/MM/dd') AS RPT_REG_DT
+									, R.ETP_ID
+									, R.RPT_PRCS_YN
+									, R.RPT_PRCS_DT
+									, R.RPT_PRCS_PIC_NM
+									, R.RPT_RSN
+									, B.BOARD_NO
+									, B.BOARD_CLFC_NO
+									, B.BOARD_TITLE
+									, B.BOARD_INQ_CNT
+									, B.BOARD_REG_DT
+									, B.BOARD_CONTENT
+									, M.MEM_PASS
+									, M.MEM_NM
+									, M.MEM_TELNO
+									, M.MEM_JOIN_DT
+									, M.MEM_DESCRIPTION
+									, M.MEM_PRVC_CLCT_AGRE_YN
+									, M.MEM_RLS_YN
+									, M.MEM_AUTH
+									, M.ENABLED
+									, M.MEM_JOB
+									, M.MEM_KAKAO_YN
+							  FROM REPORT R LEFT OUTER JOIN BOARD B ON B.BOARD_NO = R.ETP_ID
+							                INNER JOIN MEM M ON M.MEM_ID = R.MEM_ID
+							  WHERE R.RPT_CLFC_NO = 'RPTCL0002'
+							  <include refid="reportWhereBoard"></include>
+						) A
+				) U
+			WHERE U.RNUM BETWEEN
+			(#{currentPage}*#{size})-(#{size}-1) AND
+			(#{currentPage}*#{size})
+	</select>
+
+	<delete id="deleteSrsAtt" parameterType="String">
+		DELETE FROM ATTACHMENT WHERE ETP_ID = #{lctSrsNo}
+	</delete>
+
+	<update id="bReportPrcs" parameterType="String" >
+		UPDATE REPORT SET RPT_PRCS_YN = 'Y'
+         WHERE RPT_NO = #{prcs}
+	</update>
+
+	<update id="bReportNonPrcs" parameterType="String" >
+		UPDATE REPORT SET RPT_PRCS_YN = 'N'
+         WHERE RPT_NO = #{prcs}
+	</update>
+
+	<select id="getTeacher" resultType="CommonCodeVO">
+		SELECT *
+		  FROM COMMON_CODE
+		 WHERE CMCD_CLFC = 'TEACHER'
+	</select>
+
+	<delete id="deleteBg" parameterType="String">
+		DELETE FROM ATTACHMENT WHERE ETP_ID = #{prmmNo}
+	</delete>
+
+
+</mapper>
+
+
+
+

@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.premium.mapper.PremiumMapper">
+
+
+	<!-- 프리미엄 메인 조회 -->
+
+	<resultMap type="premiumVO" id="premiumMap">
+		<result property="prmmNo" column="PRMM_NO" />
+		<result property="prmmTitle" column="PRMM_TITLE" />
+		<result property="prmmContent" column="PRMM_CONTENT" />
+		<result property="prmmRegDt" column="PRMM_REG_DT" />
+		<result property="prmmClfc" column="PRMM_CLFC" />
+		<collection property="attachList" column="PRMM_NO" javaType="java.util.ArrayList" ofType="attachmentVO" select="getPrmmAttrList" />
+		<collection property="lectureList" column="PRMM_NO" javaType="java.util.ArrayList" ofType="lectureVO" select="getLectureList" />
+		<collection property="internshipList" column="PRMM_NO" javaType="java.util.ArrayList" ofType="internshipVO" select="getInternshipList" />
+
+	</resultMap>
+
+	<select id="getPrmmList" resultMap="premiumMap" parameterType="String">
+		SELECT  PRMM.PRMM_NO, PRMM_TITLE, PRMM_CONTENT, PRMM_REG_DT, PRMM_CLFC
+		  FROM PREMIUM PRMM
+		  LEFT OUTER JOIN INTERNSHIP ITNS ON(ITNS.PRMM_NO = PRMM.PRMM_NO AND TO_CHAR(ITNS_BGNG_DT - 3, 'yyyy/MM/dd')  >= TO_CHAR(SYSDATE, 'yyyy/MM/dd'))
+		  LEFT OUTER JOIN LECTURE LCT ON(LCT.PRMM_NO = PRMM.PRMM_NO)
+ 		 WHERE 1=1
+		<if test="prmmClfc == '' or prmmClfc == null">
+			AND		( (PRMM.PRMM_CLFC = 'PRE0003'  AND  ITNS.ITNS_APRV_YN = 'Y'
+												  AND TO_CHAR(ITNS.ITNS_END_DT, 'yyyy/MM/dd') >= TO_CHAR(SYSDATE, 'yyyy/MM/dd'))
+	        			OR      PRMM.PRMM_CLFC = 'PRE0001'
+	        			OR      (PRMM.PRMM_CLFC = 'PRE0002' AND LCT.LCT_DT >= TO_CHAR(SYSDATE, 'yyyy/MM/dd'))
+	        		)
+		</if>
+		<if test="prmmClfc == 'PRE0003'">
+			AND		PRMM.PRMM_CLFC = 'PRE0003'  AND  ITNS.ITNS_APRV_YN = 'Y'
+												 AND TO_CHAR(ITNS.ITNS_END_DT, 'yyyy/MM/dd') >= TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+		</if>
+		<if test="prmmClfc == 'PRE0001'">
+			AND		PRMM.PRMM_CLFC = 'PRE0001'
+		</if>
+		<if test="prmmClfc == 'PRE0002'">
+			AND		PRMM.PRMM_CLFC = 'PRE0002' AND LCT.LCT_DT >= TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+		</if>
+        ORDER BY PRMM_NO DESC
+	</select>
+
+
+
+	<!-- 프리미엄 첨부파일 조회 -->
+	<select id="getPrmmAttrList" parameterType="String" resultType="attachmentVO">
+		SELECT ATCH.ETP_ID, ATCH.ATT_NO, ATCH.ATT_CLFC_NO, ATCH.ATT_PATH, ATCH.ATT_NM, ATCH.ATT_REG_DT
+		  FROM ATTACHMENT ATCH
+		  LEFT OUTER JOIN BOARD BRD ON (ATCH.ETP_ID = BRD.BOARD_NO)
+		 WHERE ATCH.ETP_ID = #{prmmNo}
+		 ORDER BY ATCH.ATT_NO
+	</select>
+
+	<!-- 프리미엄-강의 연결해서 select -->
+	<select id="getLectureList" parameterType="String" resultType="lectureVO">
+		SELECT LEC.LCT_NO, LEC.PRMM_NO, LEC.LCT_DVSN, LEC.LCT_DT, LEC.LCT_INSTR_NM
+		  FROM LECTURE LEC
+		  LEFT OUTER JOIN PREMIUM PRM ON (LEC.PRMM_NO = PRM.PRMM_NO)
+		 WHERE LEC.PRMM_NO = #{prmmNo}
+		 ORDER BY LEC.LCT_NO
+	</select>
+
+	<!-- 프리미엄-인턴십 연결해서 select -->
+	<select id="getInternshipList" parameterType="String" resultType="internshipVO">
+		SELECT ITNS.ITNS_NO, ITNS.ENT_NO, ITNS.PRMM_NO, ITNS.ITNS_APRV_YN, ITNS.ITNS_ENTRT_NOPE
+        		, ITNS.ITNS_BGNG_DT, ITNS.ITNS_END_DT, ITNS.ITNS_CONDITION
+        		, DAYS.ITNS_REC_START, DAYS.ITNS_REC_END
+				, ATT.ATT_NM
+		  FROM PREMIUM PRMM
+		  FULL OUTER JOIN INTERNSHIP ITNS ON( ITNS.PRMM_NO = PRMM.PRMM_NO)
+		  FULL OUTER JOIN ATTACHMENT ATT ON (ITNS.ENT_NO = ATT.ETP_ID)
+		  FULL OUTER JOIN (SELECT PRMM_NO, ITNS_BGNG_DT-7 AS ITNS_REC_START, ITNS_BGNG_DT-3 AS ITNS_REC_END FROM INTERNSHIP) DAYS ON (DAYS.PRMM_NO = PRMM.PRMM_NO)
+		 WHERE ITNS.PRMM_NO = #{prmmNo}
+		   AND PRMM.PRMM_CLFC = 'PRE0003'
+		   AND ATT_CLFC_NO = 'ATTCL0002'
+		   AND ITNS.ITNS_APRV_YN = 'Y'         <!-- 승인여부 -->
+		  <![CDATA[
+		   AND DAYS.ITNS_REC_END >= TO_DATE(SYSDATE, 'yyyy/MM/dd')
+		  ]]>
+		ORDER BY PRMM_NO DESC
+	</select>
+
+
+	<select id="getPrmmDetail" parameterType="premiumVO" resultMap="premiumMap">
+		SELECT  PRMM_NO, PRMM_TITLE, PRMM_CONTENT, PRMM_REG_DT, PRMM_CLFC
+		FROM    PREMIUM
+		WHERE	PRMM_NO = #{prmmNo}
+		ORDER BY PRMM_NO DESC
+	</select>
+
+	<insert id="applyInternship" parameterType="internshipEntryantVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="itnsEntrtNo">
+			SELECT  NVL(SUBSTR(MAX(ITNS_ENTRT_NO), 1, 5) || TRIM(TO_CHAR(SUBSTR(MAX(ITNS_ENTRT_NO), 8)+1,'0000'))
+            		, 'ENTRY0001')
+			FROM INTERNSHIP_ENTRYANT
+<!-- 			WHERE ITNS_NO = #{itnsNo} -->
+		</selectKey>
+		INSERT INTO INTERNSHIP_ENTRYANT(ITNS_ENTRT_NO, ITNS_NO, MEM_ID, ITNS_ENTRT_DT, ITNS_ENTRT_APRV_YN)
+ 		VALUES	     (#{itnsEntrtNo}, #{itnsNo}, #{memId}, TO_CHAR(SYSDATE, 'yyyy/MM/dd'), 'N')
+	</insert>
+
+	<select id="checkInternshipEntryant" parameterType="internshipEntryantVO" resultType="int">
+		SELECT  COUNT(*)
+		FROM    INTERNSHIP_ENTRYANT
+		WHERE   ITNS_NO = #{itnsNo}
+		AND     MEM_ID = #{memId}
+	</select>
+
+	<select id="checkApply" parameterType="String" resultType="int">
+		SELECT  COUNT(*)
+		FROM    RECORD
+		WHERE   ETP_ID = #{etpId}
+		AND     MEM_ID = #{memId}
+		AND		REC_BMK_YN = 'Y'
+	</select>
+
+
+	<!-- ================================================================== -->
+	<!-- myPremium (프리미엄 마이페이지) -->
+	<!-- ================================================================== -->
+
+	<!-- 내가 열람한 프리미엄 목록 -->
+	<select id="getMyPrmmRec" parameterType="recordVO" resultMap="premiumMap">
+		SELECT  PRMM_NO, PRMM_TITLE, PRMM_CONTENT, PRMM_REG_DT, PRMM_CLFC
+	    FROM    PREMIUM PRMM LEFT OUTER JOIN RECORD REC ON(PRMM.PRMM_NO = REC.ETP_ID)
+	    WHERE   REC.MEM_ID=#{memId}
+	    AND     REC.REC_CLFC_NO = #{recClfcNo}
+	    ORDER BY REC.REC_REG_DT DESC
+	</select>
+
+	<select id="getmyLectureList" parameterType="recordVO" resultMap="premiumMap">
+	    SELECT  PRMM_NO, PRMM_TITLE, PRMM_CONTENT, PRMM_REG_DT, PRMM_CLFC
+	    FROM    PREMIUM PRMM LEFT OUTER JOIN RECORD REC ON(PRMM.PRMM_NO = REC.ETP_ID)
+	    WHERE   REC.MEM_ID=#{memId}
+	    AND     REC.REC_CLFC_NO = #{recClfcNo}
+	    AND		REC.REC_BMK_YN = 'Y'
+	    AND     (PRMM.PRMM_CLFC = 'PRE0001' OR PRMM.PRMM_CLFC = 'PRE0002')
+	</select>
+
+	<resultMap type="lectureVO" id="lectureMap">
+		<result property="prmmNo" column="PRMM_NO" />
+		<result property="prmmTitle" column="PRMM_TITLE" />
+		<result property="prmmContent" column="PRMM_CONTENT" />
+		<result property="prmmRegDt" column="PRMM_REG_DT" />
+		<result property="prmmClfc" column="PRMM_CLFC" />
+		<result property="lctNo" column="LCT_NO" />
+		<result property="lctDvsn" column="LCT_DVSN" />
+		<result property="lctDt" column="LCT_DT" />
+		<result property="lctInstrNm" column="LCT_INSTR_NM" />
+		<result property="attNm" column="ATT_NM" />
+		<result property="attPath" column="ATT_PATH" />
+		<collection property="lecSeriesList" column="PRMM_NO" javaType="java.util.ArrayList" ofType="lectureSeriesVO" select="getLecSrsList" />
+		<collection property="lecAttVOList" column="PRMM_NO" javaType="java.util.ArrayList" ofType="attachmentVO" select="getLecAttList" />
+	</resultMap>
+
+	<select id="getLectureDetail" parameterType="premiumVO" resultMap="lectureMap">
+		SELECT 	PRMM.PRMM_NO, PRMM.PRMM_TITLE, PRMM.PRMM_REG_DT, PRMM.PRMM_CLFC
+		        , LEC.LCT_NO, LEC.LCT_DVSN, LEC.LCT_DT, LEC.LCT_INSTR_NM
+		        , ATT.ATT_NM, ATT.ATT_PATH
+		        , PRMM.PRMM_CONTENT
+		FROM 	PREMIUM PRMM LEFT OUTER JOIN LECTURE LEC ON (PRMM.PRMM_NO = LEC.PRMM_NO)
+							 FULL OUTER JOIN ATTACHMENT ATT ON (PRMM.PRMM_NO = ATT.ETP_ID)
+		WHERE 	PRMM.PRMM_NO = #{prmmNo}
+	</select>
+
+	<select id="getLecSrsList" parameterType="String" resultType="lectureSeriesVO">
+		SELECT ROWNUM, A.*
+        FROM (SELECT  LCT_SRS_NO, LCT_NO, PRMM_NO, LCT_TITLE, LCT_HR
+				, ATT.ATT_NM, ATT.ATT_PATH
+		FROM 	LECTURE_SERIES LECS LEFT OUTER JOIN ATTACHMENT ATT ON (LECS.PRMM_NO = ATT.ETP_ID)
+		WHERE 	LECS.PRMM_NO = #{prmmNo}
+		ORDER BY LCT_TITLE) A
+	</select>
+
+	<select id="getLecAttList" parameterType="String" resultType="attachmentVO">
+		SELECT ATCH.ETP_ID, ATCH.ATT_NO, ATCH.ATT_CLFC_NO, ATCH.ATT_PATH, ATCH.ATT_NM, ATCH.ATT_REG_DT
+		  FROM ATTACHMENT ATCH
+		  LEFT OUTER JOIN INTERNSHIP_COMMUNITY ITCM ON (ITCM.ITNS_CMMU_NO = ATCH.ETP_ID)
+		 WHERE ATCH.ETP_ID = #{prmmNo}
+		 ORDER BY ATCH.ATT_NO
+	</select>
+
+	<select id="getlecSrsDetail" parameterType="lectureSeriesVO" resultType="lectureSeriesVO">
+		SELECT 	ROWNUM, LCT_SRS_NO, LCT_NO, PRMM_NO, LCT_TITLE, LCT_HR
+        		, ATT.ATT_PATH, ATT.ATT_NM
+		FROM 	LECTURE_SERIES LECS, ATTACHMENT ATT
+		WHERE 	LECS.LCT_SRS_NO = #{lctSrsNo}
+		AND     LECS.LCT_SRS_NO = ATT.ETP_ID
+	</select>
+
+	<update id="deletemyLecture" parameterType="recordVO">
+		UPDATE  RECORD
+		SET     REC_BMK_YN = 'N'
+		WHERE   MEM_ID = #{memId}
+		AND     ETP_ID = #{etpId}
+	</update>
+
+
+	<!-- ================================================================== -->
+	<!-- 인턴십 -->
+	<!-- ================================================================== -->
+
+	<select id="getMyInternshipList" parameterType="recordVO" resultType="internshipVO">
+	 	SELECT  ITNS.ITNS_NO, ITNS.ENT_NO, ITNS.PRMM_NO, ITNS.ITNS_APRV_YN, ITNS.ITNS_ENTRT_NOPE
+		        , ITNS.ITNS_BGNG_DT, ITNS.ITNS_END_DT, ITNS.ITNS_CONDITION
+		        , PRMM.PRMM_TITLE, PRMM.PRMM_CONTENT, PRMM.PRMM_CLFC
+				, ATT.ATT_NM
+		FROM   PREMIUM PRMM 	INNER JOIN INTERNSHIP ITNS ON (PRMM.PRMM_NO = ITNS.PRMM_NO )
+		                        INNER JOIN INTERNSHIP_ENTRYANT ITNS_ENT ON (ITNS.ITNS_NO  = ITNS_ENT.ITNS_NO)
+		                        INNER JOIN ATTACHMENT ATT ON (ITNS.ENT_NO = ATT.ETP_ID)
+		WHERE   1=1
+		AND     PRMM.PRMM_CLFC = 'PRE0003'
+		AND		ITNS_ENT.ITNS_ENTRT_APRV_YN = 'Y'
+		AND     ITNS_ENT.MEM_ID = #{memId}
+		AND     ATT.ATT_CLFC_NO = 'ATTCL0002'	<!-- 회사 대표 이미지 -->
+	    <![CDATA[
+	    AND TO_CHAR(ITNS.ITNS_END_DT, 'yyyy/MM/dd') >= TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+	    ]]>
+
+	</select>
+
+	<select id="getMyEndedInternshipList" parameterType="recordVO" resultType="internshipVO">
+	 	SELECT  ITNS.ITNS_NO, ITNS.ENT_NO, ITNS.PRMM_NO, ITNS.ITNS_APRV_YN, ITNS.ITNS_ENTRT_NOPE
+		        , ITNS.ITNS_BGNG_DT, ITNS.ITNS_END_DT, ITNS.ITNS_CONDITION
+		        , PRMM.PRMM_TITLE, PRMM.PRMM_CONTENT, PRMM.PRMM_CLFC
+				, ATT.ATT_NM
+		FROM   PREMIUM PRMM 	INNER JOIN INTERNSHIP ITNS ON (PRMM.PRMM_NO = ITNS.PRMM_NO )
+		                        INNER JOIN INTERNSHIP_ENTRYANT ITNS_ENT ON (ITNS.ITNS_NO  = ITNS_ENT.ITNS_NO)
+		                        INNER JOIN ATTACHMENT ATT ON (ITNS.ENT_NO = ATT.ETP_ID)
+		WHERE   1=1
+		AND     PRMM.PRMM_CLFC = 'PRE0003'
+		AND		ITNS_ENT.ITNS_ENTRT_APRV_YN = 'Y'
+		AND     ITNS_ENT.MEM_ID = #{memId}
+		AND     ATT.ATT_CLFC_NO = 'ATTCL0002'	<!-- 회사 대표 이미지 -->
+		<![CDATA[
+	    AND TO_CHAR(ITNS.ITNS_END_DT, 'yyyy/MM/dd') < TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+	    ]]>
+	</select>
+
+	<!-- 내가 신청한 인턴십 상세보기 -->
+	<resultMap type="internshipVO" id="itnsMap">
+		<result property="itnsNo" column="ITNS_NO" />
+		<result property="entNo" column="ENT_NO" />
+		<result property="entNm" column="ENT_NM" />
+		<result property="prmmNo" column="PRMM_NO" />
+		<result property="itnsAprvYn" column="ITNS_APRV_YN" />
+		<result property="itnsEntrtNope" column="ITNS_ENTRT_NOPE" />
+		<result property="itnsBgngDt" column="ITNS_BGNG_DT" />
+		<result property="itnsEndDt" column="ITNS_END_DT" />
+		<result property="itnsCondition" column="ITNS_CONDITION" />
+		<result property="itnsRecStart" column="ITNS_REC_START" />
+		<result property="itnsRecEnd" column="ITNS_REC_END" />
+		<result property="attNm" column="ATT_NM" />
+		<!-- ============================= -->
+		<result property="prmmTitle" column="PRMM_TITLE" />
+		<result property="prmmContent" column="PRMM_CONTENT" />
+		<result property="prmmClfc" column="PRMM_CLFC" />
+		<!-- ============================= -->
+		<collection property="entVOList" column="ENT_NO" javaType="java.util.ArrayList" ofType="enterpriseVO" select="getEntDetail" />
+		<collection property="entMemVOList" column="ENT_NO" javaType="java.util.ArrayList" ofType="enterpriseMemVO" select="getEntMemDetail" />
+		<collection property="itnsEntrtVOList" column="ITNS_NO" javaType="java.util.ArrayList" ofType="enterpriseMemVO" select="getItnsEntrtList" />
+	</resultMap>
+
+	<!-- 내가 신청한 인턴십VO가져오기 -->
+	<select id="getMyInternshipDetail" parameterType="internshipVO" resultMap="itnsMap">
+		SELECT DISTINCT PRMM.PRMM_TITLE, PRMM.PRMM_CONTENT, PRMM.PRMM_CLFC,
+		       ITNS.ITNS_NO, ITNS.ENT_NO, ITNS.PRMM_NO, ITNS.ITNS_APRV_YN, ITNS.ITNS_ENTRT_NOPE, ITNS.ITNS_BGNG_DT,
+		       ITNS.ITNS_END_DT, ITNS.ITNS_CONDITION, ITNS.ITNS_BGNG_DT - 7 AS ITNS_REC_START, ITNS.ITNS_BGNG_DT - 3 AS ITNS_REC_END,
+		       ATCH.ATT_NM, ENT.ENT_NM
+		  FROM PREMIUM PRMM
+		  LEFT OUTER JOIN INTERNSHIP ITNS ON(ITNS.PRMM_NO = PRMM.PRMM_NO)
+ 		  LEFT OUTER JOIN ENTERPRISE ENT ON(ENT.ENT_NO = ITNS.ENT_NO)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON(ATCH.ETP_ID = ITNS.ENT_NO AND ATCH.ATT_CLFC_NO = 'ATTCL0002')
+		 WHERE ITNS_NO = #{itnsNo}
+	</select>
+
+	<!-- 내가 신청한 인턴십을 주관하는 회사의VO(회사이름..) 가져오기 -->
+	<select id="getEntDetail" parameterType="String" resultType="enterpriseVO">
+		SELECT ENT_NO, ENT_NM, ENT_URL, ENT_ZIP, ENT_ADDR, ENT_DADDR, ENT_SLS_AMT, ENT_SECTOR, ENT_EMP_CNT, ENT_FNDN_DT, ENT_DESCRIPTION
+		  FROM ENTERPRISE
+		 WHERE ENT_NO=#{entNo}
+	</select>
+
+	<!-- 내가 신청한 인턴십을 주관하는 회사 담당자VO(담당자..) 가져오기 -->
+	<select id="getEntMemDetail" parameterType="String" resultType="enterpriseMemVO">
+		SELECT ENT_NO, MEM_ID, ENT_MEM_JOIN_DT, ENT_PIC_NM, ENT_PIC_TELNO, ENT_PIC_JBGD, ENT_APRV_YN, ENT_APRV_DT
+		  FROM ENTERPRISE_MEM
+		 WHERE ENT_NO=#{entNo}
+	</select>
+
+	<!-- 인턴십 신청자 리스트 -->
+	<select id="getItnsEntrtList" parameterType="String" resultType="internshipEntryantVO">
+		SELECT  ITNS_ENTRT_NO, ITNS_NO, ITNS_ENTRT.MEM_ID, ITNS_ENTRT_DT, ITNS_ENTRT_APRV_YN, MEM.MEM_NM
+		FROM    INTERNSHIP_ENTRYANT ITNS_ENTRT
+		                LEFT OUTER JOIN MEM ON(ITNS_ENTRT.MEM_ID = MEM.MEM_ID)
+		WHERE   ITNS_NO = #{itnsNo}
+		ORDER BY ITNS_ENTRT_DT
+	</select>
+
+
+	<!-- 멤버십 테이블 다음 시퀀스(vipNo)가져오기 -->
+	<select id="getNextVipNo" resultType="String">
+		SELECT  NVL(SUBSTR(MAX(VIP_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(VIP_NO), 4)+1,'0000'))
+		        , 'VIP0001')
+		FROM    VIP
+	</select>
+
+	<!-- 멤버십 결제 성공시 vip 테이블에 새로운 정보 insert -->
+	<insert id="insertVIP" parameterType="vipVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="vipNo">
+			SELECT  NVL(SUBSTR(MAX(VIP_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(VIP_NO), 4)+1,'0000'))
+		        , 'VIP0001')
+			FROM    VIP
+		</selectKey>
+		INSERT INTO VIP (VIP_NO, MEM_ID, VIP_GRD_NO, VIP_BGNG_DT, VIP_END_DT)
+		VALUES( #{vipNo}, #{memId}, #{vipGrd}, SYSDATE, SYSDATE+30)
+	</insert>
+
+	<!-- 인턴십 내 커뮤니티 글 조회 -->
+	<select id="boardList" parameterType="hashMap" resultType="internshipCommunityVO">
+		WITH U AS (SELECT ROWNUM AS RNUM, A.*
+		            FROM ( SELECT ITCM.ITNS_CMMU_NO, ITCM.ITNS_NO, ITCM.MEM_ID, MEM.MEM_NM, ITCM.ITNS_CMMU_TITLE, ITCM.ITNS_CMMU_CONTENT, ITCM.ITNS_CMMU_INQ_CNT, ITCM.ITNS_CMMU_REG_DT
+					  	     FROM INTERNSHIP_COMMUNITY ITCM
+						     LEFT OUTER JOIN MEM ON(ITCM.MEM_ID = MEM.MEM_ID)
+						    WHERE ITCM.ITNS_NO = #{itnsNo}
+						 ) A
+		         	)
+		 SELECT U.* FROM U WHERE U.RNUM BETWEEN ( #{currentPage} * #{size} ) - ( #{size} - 1 ) AND ( #{currentPage} * #{size} )
+	</select>
+
+	<!-- 총 게시글-->
+	<select id="getTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*) FROM INTERNSHIP_COMMUNITY
+		WHERE ITNS_NO = #{itnsNo}
+	</select>
+
+	<!-- 커뮤니티 글 상세조회 -->
+	<resultMap type="internshipCommunityVO" id="itcmMap">
+	    <result property="itnsCmmuNo" column="ITNS_CMMU_NO"/>
+	    <result property="itnsNo" column="ITNS_NO"/>
+	    <result property="memNm" column="MEM_NM"/>
+	    <result property="memId" column="MEM_ID"/>
+	    <result property="attNm" column="ATT_NM"/>
+	    <result property="itnsCmmuTitle" column="ITNS_CMMU_TITLE"/>
+	    <result property="itnsCmmuContent" column="ITNS_CMMU_CONTENT"/>
+	    <result property="itnsCmmuInqCnt" column="ITNS_CMMU_INQ_CNT" />
+	    <result property="itnsCmmuRegDt" column="ITNS_CMMU_REG_DT" />
+		<collection property="cmntList" column="ITNS_CMMU_NO" javaType="java.util.ArrayList" ofType="InternshipCommunityCommentVO" select="getCommentListById" />
+		<collection property="attList" column="ITNS_CMMU_NO" javaType="java.util.ArrayList" ofType="attachmentVO" select="getAttListById" />
+	</resultMap>
+
+	<select id="boardDetail" parameterType="boardVO" resultMap="itcmMap">
+	    SELECT ITCM.ITNS_CMMU_NO, ITCM.ITNS_NO, MEM.MEM_NM, ITCM.MEM_ID, ATCH.ATT_NM, ITCM.ITNS_CMMU_TITLE, ITCM.ITNS_CMMU_CONTENT, ITCM.ITNS_CMMU_INQ_CNT, ITCM.ITNS_CMMU_REG_DT
+	      FROM INTERNSHIP_COMMUNITY ITCM
+	      LEFT OUTER JOIN MEM ON MEM.MEM_ID = ITCM.MEM_ID
+	      LEFT OUTER JOIN ATTACHMENT ATCH ON ATCH.ETP_ID = ITCM.ITNS_CMMU_NO
+	     WHERE ITNS_CMMU_NO = #{itnsCmmuNo}
+	     ORDER BY ITCM.ITNS_CMMU_NO DESC
+	</select>
+
+	<select id="getCommentListById" parameterType="String" resultType="InternshipCommunityCommentVO">
+		SELECT ITCM_CMNT.ITNS_CMMU_CMNT_NO, ITCM_CMNT.ITNS_CMMU_NO, MEM.MEM_NM, ITCM_CMNT.MEM_ID, ITCM_CMNT.ITNS_CMMU_CMNT_CONTENT, ITCM_CMNT.ITNS_CMMU_CMNT_REG_DT,
+		       ATCH.ATT_NM
+		  FROM INTERNSHIP_COMMUNITY_COMMENT ITCM_CMNT
+		  LEFT OUTER JOIN MEM ON (MEM.MEM_ID = ITCM_CMNT.MEM_ID)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = MEM.MEM_ID)
+		 WHERE ITCM_CMNT.ITNS_CMMU_NO = #{itnsCmmuNo}
+		 ORDER BY ITCM_CMNT.ITNS_CMMU_CMNT_NO
+	</select>
+
+	<select id="getAttListById" parameterType="String" resultType="attachmentVO">
+		SELECT ATCH.ETP_ID, ATCH.ATT_NO, ATCH.ATT_CLFC_NO, ATCH.ATT_PATH, ATCH.ATT_NM, ATCH.ATT_REG_DT
+		  FROM ATTACHMENT ATCH
+		  LEFT OUTER JOIN INTERNSHIP_COMMUNITY ITCM ON (ITCM.ITNS_CMMU_NO = ATCH.ETP_ID)
+		 WHERE ATCH.ETP_ID = #{itnsCmmuNo}
+		 ORDER BY ATCH.ATT_NO
+	</select>
+
+	<insert id="boardInsert" parameterType="internshipCommunityVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="itnsCmmuNo">
+			SELECT NVL(SUBSTR(MAX(ITNS_CMMU_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(ITNS_CMMU_NO), 5)+1,'0000')),'ITCMMU0001') FROM INTERNSHIP_COMMUNITY
+		</selectKey>
+
+		INSERT INTO INTERNSHIP_COMMUNITY
+		(ITNS_CMMU_NO, ITNS_NO, MEM_ID, ITNS_CMMU_TITLE, ITNS_CMMU_CONTENT, ITNS_CMMU_INQ_CNT, ITNS_CMMU_REG_DT)
+		VALUES
+		(#{itnsCmmuNo}, #{itnsNo}, #{memId}, #{itnsCmmuTitle}, #{itnsCmmuContent}, 0, SYSDATE)
+	</insert>
+
+	<insert id="cmntInsert" parameterType="hashMap" >
+		<selectKey resultType="String" order="BEFORE" keyProperty="itnsCmmuCmntNo">
+			SELECT NVL(SUBSTR(MAX(ITNS_CMMU_CMNT_NO), 1, 6) || TRIM(TO_CHAR(SUBSTR(MAX(ITNS_CMMU_CMNT_NO), 7)+1,'0000')),'ITCMNT0001') FROM INTERNSHIP_COMMUNITY_COMMENT
+		</selectKey>
+
+		INSERT INTO INTERNSHIP_COMMUNITY_COMMENT
+		(ITNS_CMMU_CMNT_NO, ITNS_CMMU_NO, MEM_ID, ITNS_CMMU_CMNT_CONTENT, ITNS_CMMU_CMNT_REG_DT)
+		VALUES
+		( #{itnsCmmuCmntNo} ,#{cmmuNo}, #{memId}, #{content}, SYSDATE)
+	</insert>
+
+	<select id="cmntDetail" parameterType="hashMap" resultType="internshipCommunityCommentVO">
+		SELECT ITCM.ITNS_CMMU_CMNT_NO, ITCM.ITNS_CMMU_NO, ITCM.MEM_ID, MEM.MEM_NM, ITCM.ITNS_CMMU_CMNT_CONTENT, ITCM.ITNS_CMMU_CMNT_REG_DT, ATCH.ATT_NM
+		  FROM INTERNSHIP_COMMUNITY_COMMENT ITCM
+		  LEFT OUTER JOIN MEM ON(MEM.MEM_ID = ITCM.MEM_ID)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = MEM.MEM_ID)
+		 WHERE ITCM.ITNS_CMMU_CMNT_NO = #{itnsCmmuCmntNo}
+	</select>
+
+	<delete id="cmntDelete" parameterType="String" >
+		DELETE FROM INTERNSHIP_COMMUNITY_COMMENT WHERE ITNS_CMMU_CMNT_NO = #{cmntNo}
+	</delete>
+
+	<!-- 채팅 관련 -->
+	<select id="getChatList" parameterType="internshipVO" resultType="internshipChatVO">
+		SELECT DISTINCT INTERNSHIP_CHAT.ITNS_CHAT_NO, INTERNSHIP_CHAT.ITNS_NO, INTERNSHIP_CHAT.ITNS_CHAT_DT,
+		       INTERNSHIP_CHAT.ITNS_CHAT_SNDR, SDM.MEM_NM AS SDNM, INTERNSHIP_CHAT.ITNS_CHAT_CONTENT
+		  FROM INTERNSHIP_CHAT, MEM SDM, MEM RCM
+		 WHERE INTERNSHIP_CHAT.ITNS_CHAT_SNDR = SDM.MEM_ID
+		   AND ITNS_NO = #{itnsNo}
+         ORDER BY 1
+	</select>
+
+	<insert id="chatMsgInsert" parameterType="hashMap">
+		INSERT INTO INTERNSHIP_CHAT (ITNS_CHAT_NO, ITNS_NO, ITNS_CHAT_SNDR, ITNS_CHAT_CONTENT, ITNS_CHAT_DT)
+		VALUES ( (SELECT NVL(SUBSTR(MAX(ITNS_CHAT_NO), 0, 6) || TRIM(TO_CHAR(SUBSTR(MAX(ITNS_CHAT_NO), 7)+1,'0000')),'ITCHAT0001') FROM INTERNSHIP_CHAT),
+		#{itnsNo}, #{sessionId}, #{message}, SYSDATE)
+	</insert>
+	<!-- 채팅 관련 -->
+
+
+	<!-- ================================================================== -->
+	<!-- 기업회원 -->
+	<!-- ================================================================== -->
+
+	<!-- 기업회원 인턴십 리스트 조회 -->
+	<select id="getEntItnsList" parameterType="Map" resultType="internshipVO">
+		SELECT  ITNS.ITNS_NO, ITNS.ENT_NO, ITNS.PRMM_NO, ITNS.ITNS_APRV_YN, ITNS.ITNS_ENTRT_NOPE
+		        , ITNS.ITNS_BGNG_DT, ITNS.ITNS_END_DT, ITNS.ITNS_CONDITION
+		        , ITNS.ITNS_BGNG_DT - 7 AS ITNS_REC_START, ITNS.ITNS_BGNG_DT - 3 AS ITNS_REC_END
+		        , PRMM.PRMM_TITLE, PRMM.PRMM_CONTENT, PRMM.PRMM_CLFC
+		FROM   PREMIUM PRMM 	LEFT OUTER JOIN INTERNSHIP ITNS ON (PRMM.PRMM_NO = ITNS.PRMM_NO )
+		                        LEFT OUTER JOIN ENTERPRISE ENT ON(ITNS.ENT_NO = ENT.ENT_NO)
+		WHERE   PRMM.PRMM_CLFC = 'PRE0003'
+		AND     ITNS.ENT_NO = #{entNo}
+		AND		(ITNS_APRV_YN = 'Y' OR ITNS_APRV_YN = 'N')
+		ORDER BY ITNS_APRV_YN DESC, ITNS.ITNS_END_DT DESC
+	</select>
+
+	<!-- 프리미엄 테이블 다음 기본키 값 조회 -->
+	<select id="getNxtPrmmNo" resultType="String">
+		SELECT  NVL(SUBSTR(MAX(PRMM_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(PRMM_NO), 5)+1,'0000'))
+		        , 'PRMM0001')
+		FROM    PREMIUM
+	</select>
+
+	<!-- 인턴십=> 프리미엄테이블에 추가 -->
+	<insert id="insertPrmm" parameterType="premiumVO">
+		INSERT INTO PREMIUM(
+			PRMM_NO, PRMM_TITLE, PRMM_REG_DT, PRMM_CLFC, PRMM_CONTENT
+		) VALUES (
+			#{prmmNo}, #{prmmTitle}, sysdate, 'PRE0003', #{prmmContent}
+		)
+	</insert>
+
+	<!-- 인턴십 => 인턴십 테이블에 추가 -->
+	<insert id="insertItns" parameterType="internshipVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="itnsNo">
+			SELECT  NVL(SUBSTR(MAX(ITNS_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(ITNS_NO), 5)+1,'0000'))
+			        , 'ITNS0001')
+			FROM    INTERNSHIP
+		</selectKey>
+		INSERT INTO INTERNSHIP(
+			ITNS_NO, ENT_NO, PRMM_NO, ITNS_APRV_YN, ITNS_ENTRT_NOPE, ITNS_BGNG_DT, ITNS_END_DT, ITNS_CONDITION
+		) VALUES (
+			#{itnsNo}, #{entNo}, #{prmmNo}, 'N', #{itnsEntrtNope},  #{itnsBgngDt}, #{itnsEndDt}, #{itnsCondition}
+		)
+	</insert>
+
+	<!-- 인턴십 참가자 승인 -->
+	<update id="updateEntrtAprv" parameterType="internshipEntryantVO">
+		UPDATE 	INTERNSHIP_ENTRYANT
+		SET 	ITNS_ENTRT_APRV_YN = #{itnsEntrtAprvYn}
+		WHERE 	MEM_ID = #{memId}
+		AND 	ITNS_NO = #{itnsNo}
+	</update>
+
+	<!-- 승인된 참가자 수  -->
+	<select id="getEntrtCount" parameterType="String" resultType="int">
+		SELECT  COUNT(*)
+		FROM    INTERNSHIP_ENTRYANT
+		WHERE   ITNS_NO = #{itnsNo}
+		AND     ITNS_ENTRT_APRV_YN = 'Y'
+	</select>
+
+	<select id="getEntrtsInfo" parameterType="String" resultType="hashMap">
+		SELECT MEM.MEM_NM, ATCH.ATT_NM
+		  FROM INTERNSHIP_ENTRYANT INE
+		  LEFT OUTER JOIN MEM ON(MEM.MEM_ID = INE.MEM_ID)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON(ATCH.ETP_ID = MEM.MEM_ID)
+		 WHERE INE.ITNS_ENTRT_APRV_YN = 'Y'
+		   AND INE.ITNS_NO = #{itnsNo}
+	</select>
+
+	<update id="deleteItns" parameterType="internshipVO">
+		UPDATE 	INTERNSHIP
+		SET 	ITNS_APRV_YN = 'D'
+		WHERE   ITNS_NO = #{itnsNo}
+	</update>
+
+	<!-- 인턴십 수정(프리미엄 테이블) -->
+	<update id="editItnsPrmm" parameterType="premiumVO">
+		 UPDATE PREMIUM
+		 SET    PRMM_TITLE = #{prmmTitle}
+		        , PRMM_CONTENT = #{prmmContent}
+		 WHERE  PRMM_NO = #{prmmNo}
+	</update>
+
+	<!-- 인턴십 수정(인턴십 테이블) -->
+	<update id="editItnsItns" parameterType="internshipVO">
+		UPDATE 	INTERNSHIP
+		SET		ITNS_BGNG_DT = #{itnsBgngDt}
+				, ITNS_END_DT = #{itnsEndDt}
+				, ITNS_ENTRT_NOPE = #{itnsEntrtNope}
+				, ITNS_CONDITION = #{itnsCondition}
+		WHERE	ENT_NO = #{entNo}
+		AND		ITNS_NO = #{itnsNo}
+	</update>
+
+	<!-- 프리미엄 전체 개수 -->
+	<select id="getTotalCount" resultType="int" parameterType="String">
+		SELECT COUNT(*)
+		FROM    PREMIUM PRMM FULL OUTER JOIN INTERNSHIP ITNS ON( ITNS.PRMM_NO = PRMM.PRMM_NO)
+		                        FULL OUTER JOIN LECTURE LCT ON(PRMM.PRMM_NO = LCT.PRMM_NO)
+		                        FULL OUTER JOIN (SELECT PRMM_NO, ITNS_BGNG_DT-7 AS ITNS_REC_START, ITNS_BGNG_DT-3 AS ITNS_REC_END FROM INTERNSHIP) DAYS ON (DAYS.PRMM_NO = PRMM.PRMM_NO)
+		WHERE    1=1
+		<if test="prmmClfc == '' or prmmClfc == null">
+			AND		( (PRMM.PRMM_CLFC = 'PRE0003'  AND  ITNS.ITNS_APRV_YN = 'Y'
+												   AND TO_CHAR(DAYS.ITNS_REC_END, 'yyyy/MM/dd') >= TO_CHAR(SYSDATE, 'yyyy/MM/dd'))
+	        			OR      PRMM.PRMM_CLFC = 'PRE0001'
+	        			OR      (PRMM.PRMM_CLFC = 'PRE0002' AND LCT.LCT_DT >= TO_CHAR(SYSDATE, 'yyyy/MM/dd'))
+	        		)
+		</if>
+		<if test="prmmClfc == 'PRE0003'">
+			AND		PRMM.PRMM_CLFC = 'PRE0003'  AND  ITNS.ITNS_APRV_YN = 'Y'
+												AND TO_CHAR(DAYS.ITNS_REC_END, 'yyyy/MM/dd') >= TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+		</if>
+		<if test="prmmClfc == 'PRE0001'">
+			AND		PRMM.PRMM_CLFC = 'PRE0001'
+		</if>
+		<if test="prmmClfc == 'PRE0002'">
+			AND		PRMM.PRMM_CLFC = 'PRE0002' AND LCT.LCT_DT >= TO_CHAR(SYSDATE, 'yyyy/MM/dd')
+		</if>
+	</select>
+
+	<update id="setInternshipSchedule" parameterType="internshipScheduleVO">
+		MERGE
+		INTO INTERNSHIP_SCHEDULE
+		USING DUAL
+		ON (ITNS_SCHD_NO = #{itnsSchdNo})
+		WHEN MATCHED THEN
+		    UPDATE
+		    SET
+		        ITNS_NO = #{itnsNo},
+		        ITNS_SCHD_TITLE = #{itnsSchdTitle},
+		        INTS_START_DT = TO_DATE(#{intsStartDt}, 'YYYY/MM/DD HH24:MI:SS'),
+		        INTS_END_DT = TO_DATE(#{intsEndDt}, 'YYYY/MM/DD HH24:MI:SS'),
+		        BACKGROUND_COLOR = #{backgroundColor},
+		        TEXT_COLOR = #{textColor}
+		    WHERE
+		        ITNS_SCHD_NO = #{itnsSchdNo}
+		WHEN NOT MATCHED THEN
+		    INSERT (ITNS_SCHD_NO, ITNS_NO, ITNS_SCHD_TITLE, INTS_START_DT, INTS_END_DT, BACKGROUND_COLOR, TEXT_COLOR)
+		    VALUES ((SELECT 'SCHE' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(ITNS_SCHD_NO), 'SCHE0000'), 5) + 1, '0000'))
+		            FROM INTERNSHIP_SCHEDULE),
+		            #{itnsNo}, #{itnsSchdTitle}, TO_DATE(#{intsStartDt}, 'YYYY/MM/DD HH24:MI:SS'), TO_DATE(#{intsEndDt}, 'YYYY/MM/DD HH24:MI:SS'), #{backgroundColor}, #{textColor})
+
+		<selectKey resultType="String" order="AFTER" keyProperty="itnsSchdNo">
+			<choose>
+				<when test="itnsSchdNo.equals('SCHE0000')">
+					SELECT MAX(ITNS_SCHD_NO) FROM INTERNSHIP_SCHEDULE
+				</when>
+				<otherwise>
+					SELECT ITNS_SCHD_NO FROM INTERNSHIP_SCHEDULE WHERE ITNS_SCHD_NO = #{itnsSchdNo}
+				</otherwise>
+			</choose>
+		</selectKey>
+	</update>
+
+	<delete id="deleteInternshipSchedule" parameterType="internshipScheduleVO">
+		DELETE INTERNSHIP_SCHEDULE WHERE ITNS_SCHD_NO = #{itnsSchdNo}
+	</delete>
+
+	<select id="getInternshipSchedule" parameterType="internshipVO" resultType="internshipScheduleVO">
+		SELECT ITNS_SCHD_NO, ITNS_NO, ITNS_SCHD_TITLE, INTS_START_DT, INTS_END_DT, BACKGROUND_COLOR, TEXT_COLOR
+		FROM INTERNSHIP_SCHEDULE
+		WHERE ITNS_NO = #{itnsNo}
+	</select>
+
+	<select id="getIntetnshipEntryant" parameterType="internshipVO" resultType="memVO">
+		SELECT
+		    MEM.MEM_ID, MEM.MEM_NM, MEM.MEM_JOB
+		    , ATT.ATT_NM
+		FROM INTERNSHIP_ENTRYANT IE
+		INNER JOIN MEM ON (MEM.MEM_ID = IE.MEM_ID AND IE.ITNS_NO = #{itnsNo})
+		LEFT OUTER JOIN ATTACHMENT ATT ON (ATT.ETP_ID = IE.MEM_ID AND ATT.ATT_CLFC_NO = 'ATTCL0005')
+	</select>
+</mapper>
+
+
+
+
+
+
+
+
+
+
+

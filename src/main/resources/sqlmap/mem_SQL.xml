@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.mem.mapper.MemMapper">
+
+	<select id="getSearchList" parameterType="hashMap" resultType="hashMap">
+		WITH SL AS (
+		    SELECT 'SJ:'||JP.JOB_PSTG_TITLE AS SEARCHLIST
+		      FROM JOB_POSTING JP
+		      LEFT OUTER JOIN JOB_POSTING_SKILL JS ON(JS.JOB_PSTG_NO = JP.JOB_PSTG_NO)
+		      LEFT OUTER JOIN COMMON_CODE CC ON(CC.CMCD_DTL = JS.JOB_PSTG_SKL_NO)
+		     WHERE CC.CMCD_DTL_NM LIKE '%'||#{searchJob}||'%'
+		    UNION ALL
+		    SELECT 'SP:'||ENT_NM
+		      FROM ENTERPRISE
+		     WHERE ENT_ADDR LIKE '%'||#{searchPlace}||'%'
+		)
+		SELECT DISTINCT * FROM SL
+	</select>
+
+	<select id="memLogin" parameterType="memVO" resultType="memVO">
+		<!-- pkg_crypto.decrypt(MEM_PASS) -->
+		SELECT
+			MEM.MEM_ID, MEM.MEM_PASS, MEM.MEM_NM, MEM.MEM_TELNO, MEM.MEM_JOIN_DT,
+			MEM.MEM_DESCRIPTION, MEM.MEM_PRVC_CLCT_AGRE_YN, MEM.MEM_RLS_YN, MEM.MEM_AUTH, MEM.ENABLED, MEM.MEM_JOB, MEM.MEM_KAKAO_YN,
+			NVL(COUNT(VIP.VIP_NO), 0) AS MSYN, VIP_GRADE.VIP_GRD_NO, MAX(VIP.VIP_NO) AS VIP_NO, VIP.VIP_END_DT, TICKET.TCKT_QNTT
+		FROM MEM
+		<![CDATA[
+		LEFT OUTER JOIN VIP ON(VIP.MEM_ID = MEM.MEM_ID AND (VIP.VIP_BGNG_DT <= SYSDATE AND VIP.VIP_END_DT >= SYSDATE))
+		]]>
+		LEFT OUTER JOIN VIP_GRADE ON (VIP_GRADE.VIP_GRD_NO = VIP.VIP_GRD_NO)
+		LEFT OUTER JOIN TICKET ON(TICKET.VIP_NO = VIP.VIP_NO)
+		WHERE MEM.MEM_ID = #{memId}
+		GROUP BY MEM.MEM_ID, MEM.MEM_PASS, MEM.MEM_NM, MEM.MEM_TELNO, MEM.MEM_JOIN_DT, MEM.MEM_DESCRIPTION, MEM.MEM_PRVC_CLCT_AGRE_YN, MEM.MEM_RLS_YN, MEM.MEM_AUTH, MEM.ENABLED, MEM.MEM_JOB, MEM.MEM_KAKAO_YN, VIP_GRADE.VIP_GRD_NO,VIP.VIP_END_DT,TICKET.TCKT_QNTT
+	</select>
+
+	<insert id="memJoin" parameterType="memVO">
+		INSERT INTO MEM
+		(MEM_ID, MEM_PASS, MEM_NM, MEM_TELNO, MEM_JOIN_DT, MEM_AUTH)
+		VALUES
+		(#{memId}, #{memPass}, #{memNm}, #{memTelno}, SYSDATE, #{memAuth})
+		<!-- pkg_crypto.encrypt(#{memPass}) -->
+	</insert>
+
+	<update id="updatePass">
+		UPDATE MEM
+		SET MEM_PASS = #{memPass}
+		WHERE MEM_ID = #{memId}
+	</update>
+
+	<select id="existMem" parameterType="String" resultType="memVO">
+		SELECT *
+		FROM MEM WHERE MEM_ID = #{memId}
+	</select>
+
+	<select id="memSearch" parameterType="String" resultType="memVO">
+		SELECT ATCH.ATT_NM, SUM(TRUNC((MONTHS_BETWEEN(CAREER.CRR_RTRM_DT,CAREER.CRR_JNCMP_DT))/12))+1  AS CRRYEAR
+		  FROM MEM
+		  LEFT OUTER JOIN RESUME ON (MEM.MEM_ID = RESUME.MEM_ID)
+		  LEFT OUTER JOIN CAREER ON (CAREER.RSM_NO = RESUME.RSM_NO)
+  		  LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = MEM.MEM_ID AND ATCH.ATT_CLFC_NO = 'ATTCL0005')
+		 WHERE MEM.MEM_ID = #{memId}
+		 GROUP BY ATCH.ATT_NM
+	</select>
+
+	<update id="kakaoLogin" parameterType="memVO">
+		MERGE
+		INTO MEM
+		USING DUAL
+		ON (MEM_ID = #{memId})
+		WHEN NOT MATCHED THEN
+		INSERT (MEM_ID, MEM_PASS, MEM_NM, MEM_JOIN_DT, MEM_KAKAO_YN, MEM_PRVC_CLCT_AGRE_YN, MEM_RLS_YN)
+		VALUES (#{memId}, #{memId}||'_pass', #{memNm}, SYSDATE, 'Y', 'Y', 'Y')
+		<selectKey resultType="String" order="AFTER"
+			keyProperty="memPass">
+			SELECT MEM_PASS FROM MEM WHERE MEM_ID = #{memId}
+		</selectKey>
+	</update>
+
+	<select id="myMembership" parameterType="String" resultType="vipVO">
+		SELECT VIP.VIP_NO, VIP_GRADE.VIP_GRD, VIP_GRADE.VIP_GRD_BNF, VIP_GRADE.VIP_GRD_PRICE, VIP.VIP_BGNG_DT, VIP.VIP_END_DT, VIP.MEM_ID
+		  FROM VIP, VIP_GRADE
+		 WHERE VIP_GRADE.VIP_GRD_NO = VIP.VIP_GRD_NO
+		   AND VIP.MEM_ID = #{memId}
+		 ORDER BY VIP.VIP_NO
+	</select>
+
+	<select id="myBoardList" parameterType="String" resultType="boardVO">
+		SELECT BOARD.BOARD_NO, BOARD.BOARD_REG_DT, BOARD.MEM_ID, MEM.MEM_NM, CMNT.CMNT_CNT, MEMATCH.ATT_NM AS BRD_ATT_NM,
+		       BOARD.BOARD_TITLE, BOARD.BOARD_INQ_CNT, BOARD.BOARD_CLFC_NO, BOARD.BOARD_CONTENT,
+		       CASE WHEN TO_DATE(BOARD.BOARD_REG_DT, 'YYYY-MM-DD') = TO_DATE(SYSDATE, 'YYYY-MM-DD')
+		           THEN TO_CHAR(ROUND((TO_DATE(TO_CHAR(SYSDATE,'HH24:MI'), 'HH24:MI') - TO_DATE(TO_CHAR(BOARD.BOARD_REG_DT,'HH24:MI'), 'HH24:MI')) * 24, 0))
+		           ELSE TO_CHAR(BOARD.BOARD_REG_DT, 'YYYY-MM-DD')
+		       END AS BRDTIME,
+		       SUM(TRUNC((MONTHS_BETWEEN(CAREER.CRR_RTRM_DT,CAREER.CRR_JNCMP_DT))/12))+1  AS CRRYEAR
+		  FROM BOARD
+		  LEFT OUTER JOIN (SELECT BOARD_NO, COUNT(*) AS CMNT_CNT FROM BOARD_COMMENT GROUP BY BOARD_NO) CMNT ON (BOARD.BOARD_NO = CMNT.BOARD_NO)
+		  LEFT OUTER JOIN MEM ON (BOARD.MEM_ID = MEM.MEM_ID)
+		  LEFT OUTER JOIN RESUME ON (MEM.MEM_ID = RESUME.MEM_ID)
+		  LEFT OUTER JOIN CAREER ON (CAREER.RSM_NO = RESUME.RSM_NO)
+		  LEFT OUTER JOIN ATTACHMENT MEMATCH ON(BOARD.MEM_ID = MEMATCH.ETP_ID AND MEMATCH.ATT_CLFC_NO = 'ATTCL0005')
+		 WHERE BOARD.BOARD_CLFC_NO = 'BRDCL0003'
+		   AND BOARD.MEM_ID = #{memId}
+		 GROUP BY BOARD.BOARD_NO, BOARD.BOARD_REG_DT, BOARD.MEM_ID, MEM.MEM_NM, CMNT.CMNT_CNT, MEMATCH.ATT_NM,
+		          BOARD.BOARD_TITLE, BOARD.BOARD_INQ_CNT, BOARD.BOARD_CLFC_NO, BOARD.BOARD_CONTENT
+		 ORDER BY BOARD.BOARD_NO DESC
+	</select>
+
+	<select id="myCmntList" parameterType="String" resultType="boardCommentVO">
+		SELECT CMNT.CMNT_NO, CMNT.BOARD_NO, CMNT.MEM_ID, MEM.MEM_NM, ATCH.ATT_NM, CMNT.CMNT_CONTENT, CMNT.CMNT_REG_DT
+		  FROM BOARD_COMMENT CMNT
+		  LEFT OUTER JOIN BOARD ON (BOARD.BOARD_NO = CMNT.BOARD_NO)
+		  LEFT OUTER JOIN MEM ON (CMNT.MEM_ID = MEM.MEM_ID)
+		  LEFT OUTER JOIN ATTACHMENT ATCH ON (CMNT.MEM_ID = ATCH.ETP_ID AND ATCH.ATT_CLFC_NO = 'ATTCL0005')
+		 WHERE CMNT.MEM_ID =  #{memId}
+		   AND BOARD.BOARD_CLFC_NO = 'BRDCL0003'
+		ORDER BY CMNT.CMNT_NO DESC
+	</select>
+
+	<select id="getMyEmployStatus" parameterType="memVO" resultType="hashMap">
+		SELECT
+		    CC.CMCD_DTL,
+		    CC.CMCD_DTL_NM,
+		    COUNT(ES.EMPL_CLFC_NO) AS CNT_STS
+		FROM (SELECT * FROM COMMON_CODE WHERE CMCD_CLFC = 'EMPLOYSTATUS') CC
+		LEFT OUTER JOIN (SELECT *
+		                FROM EMPLOY_STATUS ES
+		                LEFT OUTER JOIN RESUME R ON (R.RSM_NO = ES.RSM_NO)
+		                WHERE R.MEM_ID = #{memId})
+		ES ON (ES.EMPL_CLFC_NO = CC.CMCD_DTL)
+		GROUP BY CC.CMCD_DTL, CC.CMCD_DTL_NM
+		ORDER BY CC.CMCD_DTL
+	</select>
+
+	<select id="getMyEmployStatusInfo" parameterType="Map" resultType="hashMap">
+		SELECT
+		    ENT.ENT_NM,
+		    ENT.ENT_URL,
+		    JB.JOB_PSTG_TITLE,
+		    ES.EMPL_STS_CHG_DT,
+		    ES.EMPL_CLFC_NO,
+		    ES.EMPL_STS_CHG_DT,
+		    CC.CMCD_DTL_NM
+		FROM (SELECT ES.EMPL_STS_NO, ES.EMPL_NO, ES.JOB_PSTG_NO, ES.EMPL_CLFC_NO, ES.RSM_NO, ES.EMPL_STS_CHG_DT
+		        FROM EMPLOY_STATUS ES
+		        LEFT OUTER JOIN RESUME R ON (R.RSM_NO = ES.RSM_NO)
+		        WHERE R.MEM_ID = #{memId}
+		        <if test="!emplClfcNo.equals('All')">AND ES.EMPL_CLFC_NO = #{emplClfcNo}</if>
+		        ) ES
+		LEFT OUTER JOIN JOB_POSTING JB ON (JB.JOB_PSTG_NO = ES.JOB_PSTG_NO)
+		LEFT OUTER JOIN ENTERPRISE ENT ON (JB.ENT_NO = ENT.ENT_NO)
+		LEFT OUTER JOIN COMMON_CODE CC ON (CC.CMCD_DTL = ES.EMPL_CLFC_NO)
+	</select>
+
+	<update id="updateMem" parameterType="hashMap">
+		UPDATE MEM
+		SET
+		${type} = #{value}
+		WHERE MEM_ID = #{memId}
+	</update>
+
+	<select id="getMyResume" parameterType="String" resultType="resumeVO">
+		SELECT
+		    RSM_NO, MEM_ID, RSM_TITLE, RSM_TMPR_STRG_YN, RSM_RPRS, RSM_REG_DT
+		FROM RESUME
+		WHERE MEM_ID = #{memId}
+	</select>
+
+	<select id="getCommonCode" resultType="commonCodeVO" parameterType="hashMap">
+		SELECT CMCD_CLFC, CMCD_DTL, CMCD_CLFC_NM, CMCD_DTL_NM, CMCD_USE_YN
+		FROM COMMON_CODE
+		<choose>
+			<when test="'JOB'.equals(clfc)">
+				WHERE
+					(CMCD_CLFC = 'DEVELOPER' AND UPPER(CMCD_DTL_NM) LIKE '%' || #{keyword} || '%')
+					OR (CMCD_CLFC = 'MANAGEMENT' AND UPPER(CMCD_DTL_NM) LIKE '%' || #{keyword} || '%')
+					OR (CMCD_CLFC = 'MARKETING' AND UPPER(CMCD_DTL_NM) LIKE '%' || #{keyword} || '%')
+					OR (CMCD_CLFC = 'DESIGN' AND UPPER(CMCD_DTL_NM) LIKE '%' || #{keyword} || '%')
+			</when>
+			<otherwise>
+				WHERE CMCD_CLFC = #{clfc}
+			</otherwise>
+		</choose>
+		<if test="keyword != null and keyword != ''">AND UPPER(CMCD_DTL_NM) LIKE '%' || #{keyword} || '%'</if>
+		ORDER BY CMCD_DTL_NM
+	</select>
+
+	<delete id="deleteResumeData" parameterType="Map">
+		DELETE FROM ${tblNm}
+		WHERE RSM_NO = #{rsmNo}
+	</delete>
+
+	<insert id="createResume" parameterType="resumeVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="rsmNo">
+			SELECT 'RSM' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(RSM_NO), 'RSM0000'), 4) + 1, '0000'))
+    		FROM RESUME
+		</selectKey>
+		INSERT INTO RESUME (RSM_NO, MEM_ID, RSM_TITLE, RSM_RPRS, RSM_REG_DT)
+		VALUES (#{rsmNo}, #{memId}, #{rsmTitle},
+		<choose>
+			<when test="rsmRprs != null">'Y'</when>
+			<otherwise>'N'</otherwise>
+		</choose>
+		, SYSDATE)
+	</insert>
+
+	<update id="insertInformation" parameterType="memVO">
+		UPDATE MEM
+			SET
+			MEM_TELNO = #{memTelno},
+			MEM_JOB = #{memJob},
+			MEM_AUTH = 'ROLE_NORMAL'
+		WHERE MEM_ID = #{memId}
+	</update>
+
+	<delete id="deleteResume" parameterType="resumeVO">
+		DELETE FROM RESUME WHERE RSM_NO = #{rsmNo}
+	</delete>
+
+	<update id="updateResume" parameterType="resumeVO">
+		UPDATE RESUME
+		SET
+		RSM_TITLE = #{rsmTitle}
+		<if test="rsmAboutMe != null">, RSM_ABOUT_ME = #{rsmAboutMe}</if>
+		<if test="rsmUrl != null">, RSM_URL = #{rsmUrl}</if>
+		WHERE RSM_NO = #{rsmNo}
+	</update>
+	<update id="insertAcademicBackground" parameterType="java.util.List">
+		<foreach collection="list" item="acbg" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" " index="index">
+			INTO ACADEMIC_BACKGROUND(ACBG_NO, RSM_NO, ACBG_UNIVERSITY_NM, ACBG_MAJOR, ACBG_DEGREE, ACBG_DISCRIPTION, ACBG_MTCLTN_DT
+			<if test="acbg.acbgGrdtnDt != null">, ACBG_GRDTN_DT</if>
+			, ACBG_ATTND_YN)
+			VALUES((SELECT
+					    'ACBG' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(ACBG_NO), 'ACBG0000'), 5) +1 +#{index}, '0000'))
+					FROM ACADEMIC_BACKGROUND)
+				, #{acbg.rsmNo}, #{acbg.acbgUniversityNm}, #{acbg.acbgMajor}, #{acbg.acbgDegree}, #{acbg.acbgDiscription}, #{acbg.acbgMtcltnDt}
+				<if test="acbg.acbgGrdtnDt != null">, #{acbg.acbgGrdtnDt}</if>
+				, #{acbg.acbgAttndYn})
+		</foreach>
+	</update>
+
+	<insert id="insertCareer" parameterType="careerVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="crrNo">
+			SELECT
+			    'CRR' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(CRR_NO), 'CRR0000'), 4) +1, '0000'))
+			FROM CAREER
+		</selectKey>
+		INSERT INTO CAREER(CRR_NO, RSM_NO, CRR_ENT_NM, CRR_JBGD_NM, CRR_JNCMP_DT
+		<if test="crrRtrmDt != null">, CRR_RTRM_DT</if>
+		, CRR_HDOF_YN)
+		VALUES(#{crrNo}, #{rsmNo}, #{crrEntNm}, #{crrJbgdNm}, #{crrJncmpDt}
+		<if test="crrRtrmDt != null">, #{crrRtrmDt}</if>
+		, #{crrHdofYn})
+	</insert>
+
+	<update id="insertAchievement" parameterType="java.util.List">
+		<foreach collection="list" item="achieve" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" " index="index">
+			INTO ACHIEVEMENT(ACH_NO, CRR_NO, RSM_NO, ACH_TITLE, ACH_BGNG_DT, ACH_END_DT, ACH_CONTENT)
+			VALUES((SELECT
+					    'ACH' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(ACH_NO), 'ACH0000'), 4) +1 +#{index}, '0000'))
+					FROM ACHIEVEMENT)
+					, #{achieve.crrNo}, #{achieve.rsmNo}, #{achieve.achTitle}, #{achieve.achBgngDt}, #{achieve.achEndDt}, #{achieve.achContent})
+		</foreach>
+	</update>
+
+	<update id="insertMySkill" parameterType="java.util.List">
+		<foreach collection="list" item="myskl" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" ">
+			INTO MY_SKILL(MY_SKL_NO, RSM_NO, MY_SKL_NM)
+			VALUES(#{myskl.mySklNo}, #{myskl.rsmNo}, #{myskl.mySklNm})
+		</foreach>
+	</update>
+
+	<update id="insertLanguage" parameterType="java.util.List">
+		<foreach collection="list" item="lan" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" ">
+			INTO LANGUAGE(LAN_NO, RSM_NO, LAN_NM, LAN_LEVEL)
+			VALUES(#{lan.lanNo}, #{lan.rsmNo}, #{lan.lanNm}, #{lan.lanLevel})
+		</foreach>
+	</update>
+
+	<update id="insertLanguageScore" parameterType="java.util.List">
+		<foreach collection="list" item="lanScore" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" " index="index">
+			INTO LANGUAGE_SCORE(LSCO_NO, LAN_NO, RSM_NO, LSCO_NM, LSCO_SCORE, LSCO_ACQS_DT)
+			VALUES((SELECT
+					    'LSCO' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(LSCO_NO), 'LSCO0000'), 5) +1 +#{index}, '0000'))
+					FROM LANGUAGE_SCORE)
+					, #{lanScore.lanNo}, #{lanScore.rsmNo}, #{lanScore.lscoNm}, #{lanScore.lscoScore}, #{lanScore.lscoAcqsDt})
+		</foreach>
+	</update>
+
+	<update id="insertAwards" parameterType="java.util.List">
+		<foreach collection="list" item="awards" open="INSERT ALL" close="SELECT * FROM DUAL" separator=" " index="index">
+			INTO AWARDS(AWRD_NO, RSM_NO, AWRD_NM, AWRD_INFO, AWRD_DT)
+			VALUES((SELECT
+					    'AWRD' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(AWRD_NO), 'AWRD0000'), 5) +1 +#{index}, '0000'))
+					FROM AWARDS)
+					, #{awards.rsmNo}, #{awards.awrdNm}, #{awards.awrdInfo}, #{awards.awrdDt})
+		</foreach>
+	</update>
+
+	<resultMap type="resumeVO" id="resumeMap">
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="memId" column="MEM_ID"/>
+		<result property="rsmTitle" column="RSM_TITLE"/>
+		<result property="rsmAboutMe" column="RSM_ABOUT_ME"/>
+		<result property="rsmTmprStrgYn" column="RSM_TMPR_STRG_YN"/>
+		<result property="rsmRprs" column="RSM_RPRS"/>
+		<result property="rsmRegDt" column="RSM_REG_DT"/>
+		<result property="rsmUrl" column="RSM_URL"/>
+		<collection property="academicList" resultMap="academicMap"/>
+		<collection property="mySkillList" resultMap="mySkillMap"/>
+		<collection property="careerVOList" resultMap="careerMap"/>
+		<collection property="languageVOList" resultMap="languageMap"/>
+		<collection property="awardsVOList" resultMap="awardsMap"/>
+	</resultMap>
+
+	<resultMap type="academicBackgroundVO" id="academicMap">
+		<id property="acbgNo" column="ACBG_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="acbgUniversityNm" column="ACBG_UNIVERSITY_NM"/>
+		<result property="acbgMajor" column="ACBG_MAJOR"/>
+		<result property="acbgDegree" column="ACBG_DEGREE"/>
+		<result property="acbgDiscription" column="ACBG_DISCRIPTION"/>
+		<result property="acbgMtcltnDt" column="ACBG_MTCLTN_DT"/>
+		<result property="acbgGrdtnDt" column="ACBG_GRDTN_DT"/>
+		<result property="acbgAttndYn" column="ACBG_ATTND_YN"/>
+	</resultMap>
+
+	<resultMap type="mySkillVO" id="mySkillMap">
+		<id property="mySklNo" column="MY_SKL_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="mySklNm" column="MY_SKL_NM"/>
+		<result property="mySklAcqsDt" column="MY_SKL_ACQS_DT"/>
+	</resultMap>
+
+	<resultMap type="careerVO" id="careerMap">
+		<id property="crrNo" column="CRR_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="crrEntNm" column="CRR_ENT_NM"/>
+		<result property="crrJbgdNm" column="CRR_JBGD_NM"/>
+		<result property="crrJncmpDt" column="CRR_JNCMP_DT"/>
+		<result property="crrRtrmDt" column="CRR_RTRM_DT"/>
+		<result property="crrHdofYn" column="CRR_HDOF_YN"/>
+		<collection property="achievementVOList" resultMap="achievementMap"/>
+	</resultMap>
+
+	<resultMap type="achievementVO" id="achievementMap">
+		<id property="achNo" column="ACH_NO"/>
+		<id property="crrNo" column="CRR_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="achTitle" column="ACH_TITLE"/>
+		<result property="achContent" column="ACH_CONTENT"/>
+		<result property="achBgngDt" column="ACH_BGNG_DT"/>
+		<result property="achEndDt" column="ACH_END_DT"/>
+	</resultMap>
+
+	<resultMap type="languageVO" id="languageMap">
+		<id property="lanNo" column="LAN_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="lanNm" column="LAN_NM"/>
+		<result property="lanLevel" column="LAN_LEVEL"/>
+		<collection property="languageScoreVOList" resultMap="languageScoreMap"/>
+	</resultMap>
+
+	<resultMap type="languageScoreVO" id="languageScoreMap">
+		<id property="lscoNo" column="LSCO_NO"/>
+		<id property="lanNo" column="LAN_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="lscoNm" column="LSCO_NM"/>
+		<result property="lscoScore" column="LSCO_SCORE"/>
+		<result property="lscoAcqsDt" column="LSCO_ACQS_DT"/>
+		<result property="lscoExpryDt" column="LSCO_EXPRY_DT"/>
+	</resultMap>
+
+	<resultMap type="awardsVO" id="awardsMap">
+		<id property="awrdNo" column="AWRD_NO"/>
+		<id property="rsmNo" column="RSM_NO"/>
+		<result property="awrdNm" column="AWRD_NM"/>
+		<result property="awrdInfo" column="AWRD_INFO"/>
+		<result property="awrdDt" column="AWRD_DT"/>
+	</resultMap>
+
+	<select id="resumeDetail" parameterType="resumeVO" resultMap="resumeMap">
+		SELECT
+		    *
+		FROM RESUME R
+		LEFT OUTER JOIN ACADEMIC_BACKGROUND AC ON (AC.RSM_NO = R.RSM_NO)
+		LEFT OUTER JOIN CAREER C ON (C.RSM_NO = R.RSM_NO)
+		LEFT OUTER JOIN ACHIEVEMENT AM ON (AM.RSM_NO = C.RSM_NO AND AM.CRR_NO = C.CRR_NO)
+		LEFT OUTER JOIN MY_SKILL MS ON (MS.RSM_NO = R.RSM_NO)
+		LEFT OUTER JOIN LANGUAGE L ON (L.RSM_NO = R.RSM_NO)
+		LEFT OUTER JOIN LANGUAGE_SCORE LC ON (LC.RSM_NO = L.RSM_NO AND LC.LAN_NO = L.LAN_NO)
+		LEFT OUTER JOIN AWARDS A ON (A.RSM_NO = R.RSM_NO)
+		WHERE R.RSM_NO = #{rsmNo}
+		ORDER BY C.CRR_NO DESC
+	</select>
+
+	<!-- 멤버십 테이블 다음 시퀀스(vipNo)가져오기 -->
+	<select id="getNextVipNo" resultType="String">
+		SELECT  NVL(SUBSTR(MAX(VIP_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(VIP_NO), 4)+1,'0000'))
+		        , 'VIP0001')
+		FROM    VIP
+	</select>
+
+	<!-- 멤버십 결제 성공시 vip 테이블에 새로운 정보 insert -->
+	<insert id="insertVip" parameterType="vipVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="vipNo">
+			SELECT  NVL(SUBSTR(MAX(VIP_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(VIP_NO), 4)+1,'0000'))
+		        , 'VIP0001')
+			FROM    VIP
+		</selectKey>
+		INSERT INTO VIP (VIP_NO, MEM_ID, VIP_GRD_NO, VIP_BGNG_DT, VIP_END_DT)
+		VALUES( #{vipNo}, #{memId}, #{vipGrdNo}, SYSDATE,
+		<choose>
+			<when test="vipGrdNo.equals('VIPGRD0004')">
+				SYSDATE+10000
+			</when>
+			<otherwise>
+				SYSDATE+30
+			</otherwise>
+		</choose>
+		)
+	</insert>
+
+	<insert id="insertTicket" parameterType="ticketVO">
+		INSERT INTO TICKET (TCKT_NO, VIP_NO, TCKT_QNTT)
+		VALUES((SELECT  NVL(SUBSTR(MAX(TCKT_NO),1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(TCKT_NO), 5)+1,'0000'))
+		        , 'TCKT0001')
+			FROM    TICKET )
+			, #{vipNo}, #{tcktQntt})
+	</insert>
+
+	<update id="setRprsRsm" parameterType="resumeVO">
+		<if test="rsmNo == null">
+			UPDATE RESUME SET RSM_RPRS = 'N' WHERE MEM_ID = #{memId}
+		</if>
+		<if test="rsmNo != null">
+			UPDATE RESUME SET RSM_RPRS = 'Y' WHERE RSM_NO = #{rsmNo} AND MEM_ID = #{memId}
+		</if>
+	</update>
+
+	<select id="getOfferList" parameterType="String" resultType="hashMap">
+		SELECT
+			ENT.ENT_NM AS "entNm", MTCH.MTCH_OFFER_DT AS "date", CC.CMCD_DTL_NM AS "stsNm", MTCH.MTCH_OFFER_NO AS "mtchOfferNo"
+		FROM MATCHING_OFFER MTCH
+		INNER JOIN ENTERPRISE ENT ON (ENT.ENT_NO = MTCH.ENT_NO)
+		INNER JOIN COMMON_CODE CC ON (CC.CMCD_DTL = MTCH.MTCH_OFFER_STS)
+		WHERE MTCH.MEM_ID = #{memId}
+	</select>
+
+	<select id="getLikeList" parameterType="String" resultType="hashMap">
+		SELECT
+			ENT.ENT_NM AS "entNm", RC.REC_REG_DT AS "date", '관심 있음' AS "mtchOfferNo"
+		FROM ENTERPRISE ENT
+		INNER JOIN ENTERPRISE_MEM EM ON (EM.ENT_NO = ENT.ENT_NO)
+		INNER JOIN RECORD RC ON (RC.MEM_ID = EM.MEM_ID)
+		INNER JOIN (SELECT RSM_NO
+		            FROM RESUME
+		            WHERE MEM_ID = #{memId}) R ON (R.RSM_NO = RC.ETP_ID AND RC.REC_BMK_YN = 'Y')
+	</select>
+
+	<select id="getViewList" parameterType="String" resultType="hashMap">
+		SELECT
+			ENT.ENT_NM AS "entNm", SYSDATE AS "date", '이력서 열람' AS "mtchOfferNo"
+		FROM ENTERPRISE ENT
+		INNER JOIN ENTERPRISE_MEM EM ON (EM.ENT_NO = ENT.ENT_NO)
+		INNER JOIN VIP ON (VIP.MEM_ID = EM.MEM_ID AND VIP.VIP_END_DT >= SYSDATE)
+		INNER JOIN TICKET TK ON (TK.VIP_NO = VIP.VIP_NO)
+		INNER JOIN TICKET_VIEW_RESUME TVR ON (TVR.TCKT_NO = TK.TCKT_NO
+		                                      AND TVR.RSM_NO IN (SELECT RSM_NO
+		                                                        FROM RESUME
+		                                                        WHERE MEM_ID = #{memId}))
+	</select>
+
+	<update id="acceptMatchingOffer" parameterType="String">
+		UPDATE MATCHING_OFFER
+		SET MTCH_OFFER_DT = SYSDATE, MTCH_OFFER_STS = 'EMPSTS0003'
+		WHERE MTCH_OFFER_NO = #{mtchOfferNo}
+	</update>
+
+	<select id="getMemJob" resultType="commonCodeVO" parameterType="String">
+		SELECT *
+		FROM COMMON_CODE
+		WHERE CMCD_CLFC = #{cmcdClfc}
+	</select>
+
+</mapper>

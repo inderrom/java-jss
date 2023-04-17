@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.common.mapper.AttachMapper">
+	
+	<update id="attachInsert" parameterType="hashmap" >
+		MERGE 
+		 INTO ATTACHMENT
+		USING DUAL
+		   ON ( ETP_ID = #{etpId} and ATT_CLFC_NO = #{attClfcNo} )
+		 WHEN MATCHED THEN
+		      UPDATE 
+		         SET ATT_NM = #{filename}
+		 WHEN NOT MATCHED THEN
+		      INSERT (ATCH_NO, ATT_NO, ATT_CLFC_NO, ATT_NM, ATT_PATH, ATT_REG_DT, ETP_ID) 
+			  VALUES ( (SELECT NVL(SUBSTR(MAX(ATCH_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(ATCH_NO), 5)+1,'0000')),'ATCH0001') FROM ATTACHMENT), 
+		            'ATT0000',#{attClfcNo},#{filename},#{uploadFolder}, SYSDATE, #{etpId})
+	</update>
+	
+</mapper>

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tiles-definitions PUBLIC 
+"-//Apache Software Foundation//DTD Tiles Configuration 3.0//EN" 
+"http://tiles.apache.org/dtds/tiles-config_3_0.dtd">
+<!-- tiles 설정 -->
+<tiles-definitions>
+	
+
+	
+   <!-- 진짜 최종 관리자 layout -->
+<!--    <definition name="admin_tiles-layout" template="/WEB-INF/views/adminTiles/adminIndex.jsp"> -->
+<!--       <put-attribute name="admin_header" value="/WEB-INF/views/adminTiles/adminHeader.jsp" /> -->
+<!--       <put-attribute name="admin_aside" value="/WEB-INF/views/adminTiles/adminAside.jsp" /> -->
+<!--       <put-attribute name="admin_body" value="" /> -->
+<!--       <put-attribute name="admin_footer" value="/WEB-INF/views/adminTiles/adminFooter.jsp" /> -->
+<!--    </definition> -->
+   <!-- name의 */*은 body의 value에서 1과 2에 해당
+      controller에서 forwarding 시 return "1/2";
+    -->
+<!--    <definition name="admin/*" extends="admin_tiles-layout"> -->
+<!--       <put-attribute name="admin_body" value="/WEB-INF/views/admin/{1}.jsp" /> -->
+<!--    </definition> -->
+   
+   
+   <!-- 관리자 layout -->
+   <definition name="tiles-layout3" template="/WEB-INF/views/tiles/adminIndex.jsp">
+      <put-attribute name="adminHeader" value="/WEB-INF/views/tiles/adminHeader.jsp" />
+      <put-attribute name="adminAside" value="/WEB-INF/views/tiles/adminAside.jsp" />
+      <put-attribute name="adminBody" value="" />
+      <put-attribute name="adminFooter" value="/WEB-INF/views/tiles/adminFooter.jsp" />
+   </definition>
+   <!-- name의 */*은 body의 value에서 1과 2에 해당
+      controller에서 forwarding 시 return "1/2";
+    -->
+   <definition name="admin/*" extends="tiles-layout3">
+      <put-attribute name="adminBody" value="/WEB-INF/views/admin/{1}.jsp" />
+   </definition>
+   
+    
+   <!-- 진짜 최종 기업 마이페이지 layout -->
+   <definition name="enterprise-tiles-layout" template="/WEB-INF/views/enterpriseTiles/enterprise_index.jsp">
+      <put-attribute name="enterpriseHeader" value="/WEB-INF/views/enterpriseTiles/enterprise_header.jsp" />
+      <put-attribute name="enterpriseAside" value="/WEB-INF/views/enterpriseTiles/enterprise_aside.jsp" />
+      <put-attribute name="enterpriseBody" value="" />
+      <put-attribute name="enterpriseFooter" value="/WEB-INF/views/enterpriseTiles/enterprise_footer.jsp" />
+   </definition>
+   <!-- name의 *은 body의 value에서 1에 해당
+      controller에서 forwarding 시 return "1";
+    -->
+   <definition name="enterprise/*" extends="enterprise-tiles-layout">
+      <put-attribute name="enterpriseBody" value="/WEB-INF/views/enterprise/{1}.jsp" />
+   </definition>
+   
+    
+   <!-- 진짜 최종 기업 마이페이지 layout -->
+   <definition name="matching-tiles-layout" template="/WEB-INF/views/enterpriseTiles/enterprise_index.jsp">
+      <put-attribute name="enterpriseHeader" value="/WEB-INF/views/enterpriseTiles/enterprise_header.jsp" />
+      <put-attribute name="enterpriseAside" value="/WEB-INF/views/enterpriseTiles/enterprise_aside.jsp" />
+      <put-attribute name="enterpriseBody" value="" />
+      <put-attribute name="enterpriseFooter" value="/WEB-INF/views/enterpriseTiles/enterprise_footer.jsp" />
+   </definition>
+   <!-- name의 *은 body의 value에서 1에 해당
+      controller에서 forwarding 시 return "1";
+    -->
+   <definition name="matching/*" extends="matching-tiles-layout">
+      <put-attribute name="enterpriseBody" value="/WEB-INF/views/matching/{1}.jsp" />
+   </definition>
+   
+   <!-- 기업 마이페이지 layout -->
+<!--    <definition name="enterprise-tiles-layout" template="/WEB-INF/views/enterpriseTiles/enterpriseIndex.jsp"> -->
+<!--       <put-attribute name="enterpriseHeader" value="/WEB-INF/views/enterpriseTiles/enterpriseHeader.jsp" /> -->
+<!--       <put-attribute name="enterpriseAside" value="/WEB-INF/views/enterpriseTiles/enterpriseAside.jsp" /> -->
+<!--       <put-attribute name="enterpriseBody" value="" /> -->
+<!--       <put-attribute name="enterpriseFooter" value="/WEB-INF/views/enterpriseTiles/enterpriseFooter.jsp" /> -->
+<!--    </definition> -->
+   <!-- name의 *은 body의 value에서 1에 해당
+      controller에서 forwarding 시 return "1";
+    -->
+<!--    <definition name="enterprise/*" extends="enterprise-tiles-layout"> -->
+<!--       <put-attribute name="enterpriseBody" value="/WEB-INF/views/enterprise/{1}.jsp" /> -->
+<!--    </definition> -->
+   
+   
+   <!-- 프리미엄 마이페이지 layout -->
+   <definition name="premium-tiles-layout" template="/WEB-INF/views/premiumTiles/premiumIndex.jsp">
+      <put-attribute name="premiumHeader" value="/WEB-INF/views/premiumTiles/premiumHeader.jsp" />
+      <put-attribute name="premiumAside" value="/WEB-INF/views/premiumTiles/premiumAside.jsp" />
+      <put-attribute name="premiumBody" value="" />
+      <put-attribute name="premiumFooter" value="/WEB-INF/views/premiumTiles/premiumFooter.jsp" />
+   </definition>
+   <!-- name의 *은 body의 value에서 1에 해당
+      controller에서 forwarding 시 return "1";
+    -->
+   <definition name="tempPremium/*" extends="premium-tiles-layout">
+      <put-attribute name="premiumBody" value="/WEB-INF/views/tempPremium/{1}.jsp" />
+   </definition>
+   
+   
+   <!-- 일반 서비스  layout -->
+   <definition name="tiles-layout" template="/WEB-INF/views/tiles/index.jsp">
+      <put-attribute name="header" value="/WEB-INF/views/tiles/header.jsp" />
+      <put-attribute name="body" value="" />
+      <put-attribute name="footer" value="/WEB-INF/views/tiles/footer.jsp" />
+   </definition>
+   <!-- name의 */*은 body의 value에서 1과 2에 해당
+      controller에서 forwarding 시 return "1/2";
+    -->
+   <definition name="*/*" extends="tiles-layout">
+      <put-attribute name="body" value="/WEB-INF/views/{1}/{2}.jsp" />
+   </definition>
+   
+   
+   <!-- main layout2 -->
+   <definition name="tiles-layout2" template="/WEB-INF/views/tiles/index.jsp">
+      <put-attribute name="header" value="/WEB-INF/views/tiles/header.jsp" />
+      <put-attribute name="aside" value="/WEB-INF/views/tiles/aside.jsp" />
+      <put-attribute name="body" value="" />
+      <put-attribute name="footer" value="/WEB-INF/views/tiles/footer.jsp" />
+   </definition>
+   <!-- name의 *은 body의 value에서 1에 해당
+      controller에서 forwarding 시 return "1";
+    -->
+   <definition name="*" extends="tiles-layout2">
+      <put-attribute name="body" value="/WEB-INF/views/{1}.jsp" />
+   </definition>
+   
+   
+   
+  
+   
+</tiles-definitions>

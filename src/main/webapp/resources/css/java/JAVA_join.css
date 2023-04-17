@@ -1,0 +1,138 @@
+/* 로그인 main 시작 */
+
+
+
+/* 회원가입 main 시작 */
+.login_join_size{
+  width: 500px;
+  height: 800px;
+  margin:auto;
+}
+.join_header{
+  font-size: 18px;
+}
+.join_cancel{
+  color: #333333;
+  float: left;
+}
+
+.join_span{
+  margin-right: 38px;
+}
+
+.margin_t-6{
+  margin-top: 60px;;
+
+}
+.margin_t_3{
+  margin-top: 30px;;
+
+}
+.pading_t_3{
+  padding-top: 30px;
+}
+.pading_3{
+  padding: 3%;
+}
+.join_phone{
+
+}
+.join_phone_btn{
+    width: 29%;
+    float: right;
+    height: 50px;
+    line-height: 50px;
+    border: 1.5px solid #5B7EFA;
+    border-radius: 10px;
+    font-size: 16px;
+    font-weight: 400;
+    color: #ffffff;
+    background-color: #5B7EFA;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.join_phone_input{
+width: 69%;
+float: left;
+}
+
+.join_p{
+  color: #888888;
+    font-weight: var(--text-weight-footnote-normal);
+    text-align: left;
+    letter-spacing: var(--text-spacing-footnote);
+    font-size: var(--text-size-footnote);
+    line-height: var(--text-height-footnote);
+    margin-bottom: 20px;
+    margin-top: 0px;
+}
+.join_header_backgrund{
+  background-color: #ffffff;
+  background-size: cover;
+  position: sticky;
+  padding-top: 30px;
+  padding-bottom: 30px;
+  top: 0px;
+  margin: 0px;
+  padding-left: 6px;
+}
+.check_box_div{
+  display: flex;
+  flex-direction: row;
+  -webkit-box-align: center;
+  align-items: center;
+  position: relative;
+  min-height: 25px;
+  width: 100%;
+  margin: 10px 0px;
+}
+.check_box{
+  width: 18px;
+    height: 18px;
+    font-size: 11px;
+    display: flex;
+    -webkit-box-pack: center;
+    justify-content: center;
+    -webkit-box-align: center;
+    align-items: center;
+    border-radius: 3px;
+    border: 1px solid var(--theme-palette-colors-gray-200);
+}
+input[type="checkbox"] {
+  padding-left: 1px;
+  appearance: none;
+  border: 2px solid #5B7EFA;
+  border-radius: 4px;
+  background-color: #FFFFFF;
+  width: 20px;
+  height: 20px;
+}
+input[type="checkbox"]:checked {
+  border: 2px solid #ffffff;
+
+  background-image: url("../check.png");
+  background-size: cover;
+  width: 20px;
+  height: 20px;
+}
+.check_p{
+  margin: -3px 0px 0px 7px;
+  font-weight: bold;
+  font-family: "BMJUA";
+  justify-content : center;
+}
+.footer_div{
+  background-color: #ffffff;
+  background-size: cover;
+  position: sticky;
+  padding-top: 30px;
+  padding-bottom: 30px;
+
+  bottom: 0px;
+  margin: 0px;
+  padding-left: 6px;
+}
+
+/* 회원가입 main 끝 */

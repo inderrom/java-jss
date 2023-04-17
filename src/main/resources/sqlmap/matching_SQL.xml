@@ -1,0 +1,368 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.matching.mapper.MatchingMapper">
+
+
+	<!-- 매칭 리스트  -->
+	<select id="matchingList" parameterType="hashmap" resultMap="matchingMap">
+		SELECT *
+		FROM (SELECT
+			        ROWNUM R,
+			        R.RSM_NO,
+			        R.MEM_ID,
+			        M.MEM_NM,
+			        R.RSM_TITLE,
+			        R.RSM_TMPR_STRG_YN,
+			        R.RSM_RPRS,
+			        M.MEM_JOB,
+			        T.REC_BMK_YN,
+			        TVR.RSM_NO as TVRRSMNO
+		       FROM RESUME R
+		      INNER JOIN (SELECT
+			                    DISTINCT RSM_NO,
+			                    RC.REC_BMK_YN
+		                    FROM (SELECT
+		                                MS.RSM_NO
+		                            FROM MY_SKILL MS
+		                           LEFT OUTER JOIN ENTERPRISE_SKILL ES ON (ES.ENT_SKL_NO = MS.MY_SKL_NO AND ES.ENT_NO = #{entNo})
+		                           WHERE 1=1
+		                             <if test="keyword != null and keyword != ''">
+						             AND LOWER(MS.MY_SKL_NM) LIKE '%'|| LOWER(#{keyword}) || '%'
+						             </if>
+		                        ) U
+		                    LEFT OUTER JOIN RECORD RC ON (RC.ETP_ID = U.RSM_NO AND RC.MEM_ID = #{memId})
+		                ) T ON (T.RSM_NO = R.RSM_NO)
+		      INNER JOIN MEM M ON (M.MEM_ID = R.MEM_ID)
+		      LEFT OUTER JOIN TICKET_VIEW_RESUME TVR ON( TVR.RSM_NO = R.RSM_NO)
+		      WHERE R.RSM_RPRS = 'Y'
+		     <if test="searchMemJob != null and searchMemJob != ''">
+			    AND (LOWER(M.MEM_JOB) LIKE '%' || LOWER(#{searchMemJob}) || '%')
+			 </if>
+			 <if test="navMenu.equals('want')">
+			 	AND T.REC_BMK_YN = 'Y'
+			 </if>
+			 <if test="navMenu.equals('read')">
+			 	AND TVR.RSM_NO IS NOT NULL
+			 </if>
+			 <if test="navMenu.equals('offer') and !navMenu.equals('read')">
+				 AND R.RSM_NO IN
+				 (SELECT RSM_NO
+	                FROM RESUME R
+	                INNER JOIN MATCHING_OFFER MO ON (MO.MEM_ID = R.MEM_ID)
+	                INNER JOIN ENTERPRISE ENT ON (ENT.ENT_NO = MO.ENT_NO)
+	                WHERE R.RSM_RPRS = 'Y'
+	                AND ENT.ENT_NO = #{entNo})
+			 </if>
+			 <if test="!navMenu.equals('offer') and !navMenu.equals('read')">
+				 AND R.RSM_NO NOT IN
+				 (SELECT RSM_NO
+	                FROM RESUME R
+	                INNER JOIN MATCHING_OFFER MO ON (MO.MEM_ID = R.MEM_ID)
+	                INNER JOIN ENTERPRISE ENT ON (ENT.ENT_NO = MO.ENT_NO)
+	                WHERE R.RSM_RPRS = 'Y'
+	                AND ENT.ENT_NO = #{entNo})
+			 </if>
+			)
+		WHERE R BETWEEN (#{currentPage}*#{size})-(#{size}-1) AND (#{currentPage}*#{size})
+	</select>
+
+
+	 <!-- 전체 행의 수 (total) -->
+ 	<select id="getTotal" parameterType="hashmap" resultType="int">
+
+		SELECT
+		   COUNT(*)
+		FROM RESUME R
+		INNER JOIN (SELECT
+		                DISTINCT RSM_NO,
+		                RC.REC_BMK_YN
+		                FROM (SELECT
+		                            MS.RSM_NO
+		                        FROM MY_SKILL MS
+		                        INNER JOIN ENTERPRISE_SKILL ES ON (ES.ENT_SKL_NO = MS.MY_SKL_NO AND ES.ENT_NO = #{entNo})
+		                        <if test="keyword != null and keyword != ''">
+		                          AND LOWER(MS.MY_SKL_NM) LIKE '%'|| LOWER(#{keyword}) ||'%'
+		                        </if>
+		                    ) U
+		                    LEFT OUTER JOIN RECORD RC ON (U.RSM_NO = RC.ETP_ID AND RC.MEM_ID = #{memId})
+		            ) T ON (T.RSM_NO = R.RSM_NO)
+		INNER JOIN MEM M ON (M.MEM_ID = R.MEM_ID)
+		LEFT OUTER JOIN TICKET_VIEW_RESUME TVR ON( TVR.RSM_NO = R.RSM_NO)
+		WHERE R.RSM_RPRS = 'Y'
+		<if test="searchMemJob != null and searchMemJob != ''">
+		AND (LOWER(M.MEM_JOB) LIKE '%' || LOWER(#{searchMemJob}) || '%')
+		</if>
+		<if test="navMenu.equals('want')">
+		 	AND T.REC_BMK_YN = 'Y'
+		</if>
+		<if test="navMenu.equals('read')">
+			AND TVR.RSM_NO IS NOT NULL
+		</if>
+		<if test="navMenu.equals('offer')">
+			AND R.RSM_NO IN (SELECT RSM_NO
+									FROM RESUME R
+									INNER JOIN MATCHING_OFFER MO ON (MO.MEM_ID = R.MEM_ID)
+									INNER JOIN ENTERPRISE ENT ON (ENT.ENT_NO = MO.ENT_NO)
+									WHERE R.RSM_RPRS = 'Y'
+									AND ENT.ENT_NO = #{entNo})
+        </if>
+	</select>
+
+
+
+	<!-- 매칭 리스트 조회 -->
+	<resultMap type="resumeVO" id="matchingMap">
+		<result property="rsmNo" column="RSM_NO" />
+		<result property="memId" column="MEM_ID" />
+		<result property="memNm" column="MEM_NM" />
+		<result property="memJob" column="MEM_JOB" />
+		<result property="rsmUrl" column="RSM_URL" />
+		<result property="memTelno" column="MEM_TELNO" />
+		<result property="rsmTitle" column="RSM_TITLE" />
+		<result property="rsmTmprStrgYn" column="RSM_TMPR_STRG_YN" />
+		<result property="rsmRprs" column="RSM_RPRS" />
+		<collection property="academicList" column="RSM_NO" javaType="java.util.ArrayList" ofType="academicBackgroundVO" select="getAcademicList" />
+		<collection property="history" column="RSM_NO" javaType="java.util.ArrayList" ofType="careerVO" select="getHistory" />
+		<collection property="mySkillList" column="RSM_NO" javaType="java.util.ArrayList" ofType="mySkillVO" select="getmySkillList" />
+		<collection property="beforeList" column="RSM_NO" javaType="java.util.ArrayList" ofType="careerVO" select="getBeforeList" />
+	</resultMap>
+	
+	 <!--  학력  -->
+	 <select id="getAcademicList" parameterType="String" resultType="academicBackgroundVO">
+		SELECT
+		    ACBG_NO, RSM_NO, ACBG_UNIVERSITY_NM, ACBG_MAJOR, ACBG_DEGREE, ACBG_MTCLTN_DT, ACBG_GRDTN_DT, ACBG_ATTND_YN
+		FROM ACADEMIC_BACKGROUND
+		WHERE RSM_NO = #{rsmNo}
+		AND ACBG_MTCLTN_DT = (SELECT MAX(ACBG_MTCLTN_DT) FROM ACADEMIC_BACKGROUND WHERE RSM_NO = #{rsmNo})
+	 </select>
+
+ 	<!-- 경력, 근무이력 -->
+ 	<select id="getHistory" parameterType="String" resultType="careerVO">
+<!-- 	 	SELECT COUNT(A.CRR_NO)||'개 회사' AS crent, CR.CRYEAR  -->
+<!-- 		  FROM CAREER A -->
+<!-- 		  LEFT OUTER JOIN RESUME B ON (A.RSM_NO = B.RSM_NO) -->
+<!-- 		  LEFT OUTER JOIN (SELECT CRR_NO, (ROUND((EXTRACT(YEAR FROM CRR_RTRM_DT)-EXTRACT(YEAR FROM CRR_JNCMP_DT)),0 )+1)||'년 경력' AS CRYEAR FROM CAREER) CR ON(CR.CRR_NO = A.CRR_NO) -->
+<!-- 		 WHERE A.RSM_NO = #{rsmNo} -->
+<!-- 		 GROUP BY CR.CRYEAR -->
+	     SELECT
+		    NVL(FLOOR(ROUND(SUM(MONTHS_BETWEEN(CAREER.CRR_RTRM_DT, CAREER.CRR_JNCMP_DT)))/12),0) AS CRYEAR,
+		    COUNT(*) AS CRENT
+		  FROM CAREER
+		 INNER JOIN RESUME ON (CAREER.RSM_NO = RESUME.RSM_NO)
+		 WHERE CAREER.RSM_NO =  #{rsmNo}
+ 	</select>
+
+ 	<!-- 기술스택 -->
+ 	<select id="getmySkillList" parameterType="String" resultType="mySkillVO">
+		SELECT MY_SKL_NM
+		FROM MY_SKILL
+		WHERE RSM_NO = #{rsmNo}
+ 	</select>
+
+
+ 	<!-- 최근,이전 근무이력 -->
+ 	<select id="getBeforeList" parameterType="String" resultType="careerVO">
+		SELECT
+		    CRR_JNCMP_DT,
+		    CRR_RTRM_DT,
+		    CRR_ENT_NM,
+		    CRR_JBGD_NM,
+		    TRUNC((MONTHS_BETWEEN(CAREER.CRR_RTRM_DT,CAREER.CRR_JNCMP_DT))/12)  AS CRYEAR,
+            TRUNC(MOD(MONTHS_BETWEEN(CAREER.CRR_RTRM_DT, CAREER.CRR_JNCMP_DT ),12)) AS CRMONTH,
+		    CRR_HDOF_YN
+		FROM CAREER
+		WHERE RSM_NO = #{rsmNo}
+		ORDER BY CRR_JNCMP_DT DESC
+ 	</select>
+
+ 	<!-- commonCodeVO 전체 직군, 직무 -->
+ 	<select id="jobList" parameterType="hashmap" resultType="commonCodeVO">
+	    SELECT CMCD_DTL_NM
+	      FROM (SELECT *
+	              FROM COMMON_CODE)
+	    WHERE CMCD_CLFC = 'JOB'
+	    ORDER BY CMCD_DTL_NM
+ 	</select>
+
+
+
+ 	<!-- 이력서 상세보기 조회 -->
+	<resultMap type="resumeVO" id="matchingDetailMap">
+		<result property="rsmNo" column="RSM_NO" />
+		<result property="memId" column="MEM_ID" />
+		<result property="rsmTitle" column="RSM_TITLE" />
+		<result property="rsmAboutMe" column="RSM_ABOUT_ME" />
+		<result property="rsmTmprStrgYn" column="RSM_TMPR_STRG_YN" />
+		<result property="rsmRprs" column="RSM_RPRS" />
+		<result property="rsmRegDt" column="RSM_REG_DT" />
+		<result property="rsmUrl" column="RSM_URL" />
+		<result property="memNm" column="MEM_NM" />
+		<result property="memJob" column="MEM_JOB" />
+		<result property="memTelno" column="MEM_TELNO" />
+		<collection property="academicList" column="RSM_NO" javaType="java.util.ArrayList" ofType="academicBackgroundVO" select="getAcademicList" />
+		<collection property="history" column="RSM_NO" javaType="java.util.ArrayList" ofType="careerVO" select="getHistory" />
+		<collection property="mySkillList" column="RSM_NO" javaType="java.util.ArrayList" ofType="mySkillVO" select="getmySkillList" />
+		<collection property="beforeList" column="RSM_NO" javaType="java.util.ArrayList" ofType="careerVO" select="getBeforeList" />
+		<collection property="awardsVOList" column="RSM_NO" javaType="java.util.ArrayList" ofType="awardsVO" select="getAwardsList" />
+		<collection property="careerVOList" resultMap="carrerMap" />
+		<collection property="languageVOList" resultMap="languageMap" />
+	</resultMap>
+
+
+ 	<!-- 이력서 상세보기 리스트 -->
+ 	<select id="resumeDetail" parameterType="String" resultMap="matchingDetailMap">
+ 		   SELECT A.RSM_NO, A.MEM_ID, A.RSM_TITLE, A.RSM_ABOUT_ME, A.RSM_TMPR_STRG_YN, A.RSM_RPRS, A.RSM_REG_DT, A.RSM_URL, A.MEM_NM, A.MEM_JOB, A.MEM_TELNO
+			     , B.CRR_NO, B.RSM_NO, B.CRR_ENT_NM, B.CRR_JBGD_NM, B.CRR_JNCMP_DT, B.CRR_RTRM_DT, B.CRR_HDOF_YN
+			     , C.ACH_NO, C.CRR_NO, C.RSM_NO, C.ACH_TITLE, C.ACH_BGNG_DT, C.ACH_END_DT, C.ACH_CONTENT
+			     , D.LAN_NO, D.RSM_NO, D.LAN_NM, D.LAN_LEVEL
+			     , E.LSCO_NO, E.LAN_NO, E.RSM_NO, E.LSCO_NM, E.LSCO_SCORE, E.LSCO_ACQS_DT, E.LSCO_EXPRY_DT
+			     , F.ACBG_NO, F.RSM_NO, F.ACBG_UNIVERSITY_NM, F.ACBG_MAJOR, ACBG_DEGREE, F.ACBG_MTCLTN_DT, F.ACBG_GRDTN_DT, F.ACBG_ATTND_YN
+			     , G.MY_SKL_NO, G.RSM_NO, G.MY_SKL_NM, G.MY_SKL_ACQS_DT
+			     , H.AWRD_NO, H.RSM_NO, H.AWRD_NM, H.AWRD_INFO, H.AWRD_DT
+			FROM  (SELECT R.RSM_NO, R.MEM_ID, R.RSM_TITLE, R.RSM_ABOUT_ME, R.RSM_TMPR_STRG_YN, R.RSM_RPRS, R.RSM_REG_DT, R.RSM_URL
+			     , M.MEM_JOB, M.MEM_TELNO, M.MEM_NM
+			FROM RESUME R, MEM M WHERE R.MEM_ID = M.MEM_ID) A LEFT OUTER JOIN CAREER B ON(A.RSM_NO = B.RSM_NO)
+			                LEFT OUTER JOIN ACHIEVEMENT C ON(B.CRR_NO = C.CRR_NO AND B.RSM_NO = C.RSM_NO)
+			                LEFT OUTER JOIN LANGUAGE D ON(A.RSM_NO = D.RSM_NO)
+			                LEFT OUTER JOIN LANGUAGE_SCORE E ON(D.LAN_NO = E.LAN_NO AND D.RSM_NO = E.RSM_NO)
+			                LEFT OUTER JOIN ACADEMIC_BACKGROUND F ON(A.RSM_NO = F.RSM_NO)
+			                LEFT OUTER JOIN MY_SKILL G ON(A.RSM_NO = G.RSM_NO)
+			                LEFT OUTER JOIN AWARDS H ON(A.RSM_NO = H.RSM_NO)
+			WHERE A.RSM_NO = #{rsmNo}
+ 	</select>
+ 	
+ 	<!--  경력 -->
+ 	<resultMap type="careerVO" id="carrerMap">
+ 		<result property="crrNo" column="CRR_NO"/>
+ 		<result property="rsmNo" column="RSM_NO"/>
+ 		<result property="crrEntNm" column="CRR_ENT_NM"/>
+ 		<result property="crrJbgdNm" column="CRR_JBGD_NM"/>
+ 		<result property="crrJncmpDt" column="CRR_JNCMP_DT"/>
+ 		<result property="crrRtrmDt" column="CRR_RTRM_DT"/>
+ 		<result property="crrHdofYn" column="CRR_HDOF_YN"/>
+ 		<collection property="achievementVOList" resultMap="AchievementMap" />
+ 	</resultMap>
+
+ 	<!--  성과 -->
+ 	<resultMap type="achievementVO" id="AchievementMap">
+ 		<result property="achNo" column="ACH_NO"/>
+		<result property="crrNo" column="CRR_NO"/>
+		<result property="rsmNo" column="RSM_NO"/>
+		<result property="achTitle" column="ACH_TITLE"/>
+		<result property="achContent" column="ACH_CONTENT"/>
+		<result property="achBgngDt" column="ACH_BGNG_DT"/>
+		<result property="achEndDt" column="ACH_END_DT"/>
+ 	</resultMap>
+
+ 	<!--  외국어 -->
+ 	<resultMap type="languageVO" id="languageMap">
+ 		<result property="lanNo" column="LAN_NO"/>
+ 		<result property="rsmNo" column="RSM_NO"/>
+ 		<result property="lanNm" column="LAN_NM"/>
+ 		<result property="lanLevel" column="LAN_LEVEL"/>
+ 		<collection property="languageScoreVOList" resultMap="languageScoreVOMap" />
+ 	</resultMap>
+
+ 	<!-- 어학점수 -->
+ 	<resultMap type="languageScoreVO" id="languageScoreVOMap">
+ 		<result property="lscoNo" column="LSCO_NO"/>
+ 		<result property="lanNo" column="LAN_NO"/>
+ 		<result property="rsmNo" column="RSM_NO"/>
+ 		<result property="lscoNm" column="LSCO_NM"/>
+ 		<result property="lscoScore" column="LSCO_SCORE"/>
+ 		<result property="lscoAcqsDt" column="LSCO_ACQS_DT"/>
+ 		<result property="lscoExpryDt" column="LSCO_EXPRY_DT"/>
+ 	</resultMap>
+
+ 	<!-- 수상 -->
+ 	<select id="getAwardsList" parameterType="String" resultType="awardsVO">
+ 		SELECT
+	            AWRD_NO,
+	            RSM_NO,
+	            AWRD_NM,
+	            AWRD_INFO,
+	            AWRD_DT
+        FROM AWARDS
+        WHERE RSM_NO = #{rsmNo}
+ 	</select>
+
+ 	<select id="searchInfo" parameterType="hashmap" resultType="ticketVO">
+ 		SELECT TCKT_NO
+		  FROM TICKET
+		 WHERE VIP_NO = #{vipNo}
+ 	</select>
+
+ 	<!-- 열람권 사용시 열람권 수량 변경 -->
+ 	<update id="updateTicket" parameterType="hashmap">
+		   UPDATE TICKET
+		   SET TCKT_QNTT = ((SELECT TCKT_QNTT FROM TICKET WHERE VIP_NO = #{vipNo})-1)
+		   WHERE VIP_NO = #{vipNo}
+ 	</update>
+
+
+ 	<!--  열람한 이력서 등록 -->
+	<insert id="insertViewResume" parameterType="hashmap">
+		MERGE INTO TICKET_VIEW_RESUME TVR
+		USING DUAL
+		ON (TVR.RSM_NO = #{rsmNo})
+		WHEN MATCHED THEN
+		UPDATE SET
+            TVR.TCKT_NO = #{tcktNo}
+		WHEN NOT MATCHED THEN
+		INSERT
+        (TVR_NO, TCKT_NO, RSM_NO)
+        VALUES
+        ((SELECT NVL(SUBSTR(MAX(TVR_NO),1, 3)||TRIM(TO_CHAR(SUBSTR(MAX(TVR_NO),4)+1,'0000')),'TVR0001') FROM TICKET_VIEW_RESUME),#{tcktNo}, #{rsmNo})
+	</insert>
+
+	<select id="wantList" parameterType="hashmap" resultMap="matchingMap">
+
+		SELECT *
+		FROM (SELECT
+			        ROWNUM R,
+			        R.RSM_NO,
+			        R.MEM_ID,
+			        SUBSTR(M.MEM_NM,1,1) || 'OO' AS MEM_NM,
+			        R.RSM_TITLE,
+			        R.RSM_TMPR_STRG_YN,
+			        R.RSM_RPRS,
+			        M.MEM_JOB,
+			        T.REC_BMK_YN,
+			        TVR.RSM_NO as TVRRSMNO
+		       FROM RESUME R
+		      INNER JOIN (SELECT
+			                    DISTINCT RSM_NO,
+			                    RC.REC_BMK_YN
+		                    FROM (SELECT
+		                                MS.RSM_NO
+		                            FROM MY_SKILL MS
+		                           LEFT OUTER JOIN ENTERPRISE_SKILL ES ON (ES.ENT_SKL_NO = MS.MY_SKL_NO)
+		                           WHERE ES.ENT_NO = #{entNo}
+		                             <if test="keyword != null and keyword != ''">
+						             AND LOWER(MS.MY_SKL_NM) LIKE '%'|| LOWER(#{keyword}) ||'%'
+						             </if>
+		                        ) U
+		                    LEFT OUTER JOIN RECORD RC ON (RC.ETP_ID = U.RSM_NO AND RC.MEM_ID = #{memId})
+		                ) T ON (T.RSM_NO = R.RSM_NO)
+		      INNER JOIN MEM M ON (M.MEM_ID = R.MEM_ID)
+		      LEFT OUTER JOIN TICKET_VIEW_RESUME TVR ON( TVR.RSM_NO = R.RSM_NO)
+		      WHERE 1=1
+		      AND T.REC_BMK_YN = 'Y'
+		     <if test="searchMemJob != null and searchMemJob != ''">
+			    AND (LOWER(M.MEM_JOB) LIKE '%' || LOWER(#{searchMemJob}) || '%')
+			 </if>
+			)
+		WHERE R BETWEEN (#{currentPage}*#{size})-(#{size}-1) AND (#{currentPage}*#{size})
+	</select>
+
+	<insert id="jobOffer" parameterType="map">
+		INSERT INTO MATCHING_OFFER (MTCH_OFFER_NO, ENT_NO, MEM_ID, MTCH_OFFER_DT, MTCH_OFFER_STS)
+		VALUES(
+				(SELECT 'MTCH' || TRIM(TO_CHAR(SUBSTR(NVL(MAX(MTCH_OFFER_NO), 'MTCH0000'), 5) +1, '0000'))
+				FROM MATCHING_OFFER)
+				, #{entNo}, #{memId}, SYSDATE, 'EMPSTS0006')
+	</insert>
+
+</mapper>

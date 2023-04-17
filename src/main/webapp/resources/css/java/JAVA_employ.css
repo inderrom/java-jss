@@ -1,0 +1,11 @@
+
+.employ_select::-ms-expand {
+	display: none;
+}
+.employ_select {
+  -o-appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  ou
+}

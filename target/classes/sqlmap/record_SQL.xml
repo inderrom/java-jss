@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="kr.or.ddit.record.mapper.RecordMapper">
+	
+	<update id="setRecord" parameterType="recordVO">
+		MERGE 
+		 INTO RECORD
+		USING DUAL
+		   ON (MEM_ID = #{memId} AND ETP_ID = #{etpId})
+		 WHEN MATCHED THEN
+		      UPDATE
+		      <choose>
+		      	<when test="recordType == 'record'">
+		      		SET REC_REG_DT = SYSDATE
+		      	</when>
+		      	<otherwise>
+					SET REC_BMK_YN = (SELECT CASE WHEN REC_BMK_YN = 'Y' THEN 'N' ELSE 'Y' END AS REC_BMK_YN FROM RECORD WHERE MEM_ID = #{memId} AND ETP_ID = #{etpId})
+		      	</otherwise>
+		      </choose>
+		 WHEN NOT MATCHED THEN
+		      INSERT (MEM_ID, ETP_ID, REC_CLFC_NO, REC_REG_DT, REC_BMK_YN)
+		      VALUES (#{memId}, #{etpId}, #{recClfcNo}, SYSDATE, 
+		      <choose>
+		      	<when test="recordType == 'record'">
+		      		'N'
+		      	</when>
+		      	<otherwise>
+					'Y'
+		      	</otherwise>
+		      </choose>
+		      )
+	</update>
+	
+	<select id="getRecord" parameterType="recordVO" resultType="recordVO">
+		SELECT ROWNUM, T.*
+		FROM (SELECT
+		    MEM_ID, ETP_ID, REC_CLFC_NO, REC_REG_DT, REC_BMK_YN
+		FROM RECORD
+		WHERE MEM_ID = #{memId}
+		AND REC_CLFC_NO = #{recClfcNo}
+		ORDER BY REC_REG_DT DESC) T
+<!-- 		WHERE  -->
+<!-- 		<![CDATA[ROWNUM <= 3]]>  -->
+		
+	</select>
+	
+	<select id="getEnterpriseDetail" parameterType="enterpriseVO" resultType="enterpriseVO">
+		SELECT ENT.ENT_NO, ENT.ENT_EMP_CNT, ENT.ENT_ZIP, ENT.ENT_URL, TO_DATE(TO_CHAR(ENT.ENT_FNDN_DT,'YYYY-MM-DD'),'YYYY-MM-DD') AS ENT_FNDN_DT,
+		       ENT.ENT_SECTOR, ENT.ENT_NM, ENT.ENT_ADDR, ENT.ENT_DESCRIPTION, ENT.ENT_SLS_AMT, ENT.ENT_DADDR
+		  FROM ENTERPRISE ENT
+		 WHERE ENT.ENT_NO = #{entNo}
+	</select>
+</mapper>

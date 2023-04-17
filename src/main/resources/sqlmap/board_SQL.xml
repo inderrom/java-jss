@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="kr.or.ddit.board.mapper.BoardMapper">
+	<!-- 게시글 -->
+	<!-- 게시글 -->
+	<!-- 게시글 -->
+	
+	
+	<!-- 게시글 목록 -->
+	<resultMap type="boardVO" id="boardListMap">
+		<result property="boardNo" column="BOARD_NO"/>
+		<result property="boardTitle" column="BOARD_TITLE"/>
+		<result property="boardContent" column="BOARD_CONTENT"/>
+		<result property="boardInqCnt" column="BOARD_INQ_CNT"/>
+		<result property="boardClfcNo" column="BOARD_CLFC_NO"/>
+		<result property="memId" column="MEM_ID"/>
+		<result property="boardRegDt" column="BOARD_REG_DT" />
+		<result property="memNm" column="BRD_NM"/>
+		<result property="brdAttNm" column="BRD_ATT_NM" />
+		<result property="brdTime" column="BRDTIME" />
+		<result property="crrYear" column="CRRYEAR" />
+		<result property="memJobNm" column="MEM_JOB_NM" />
+		<collection property="boardCmntVOList" column="BOARD_NO" javaType="java.util.ArrayList" ofType="boardCommentVO" select="getCommentList" />
+		<collection property="boardAttVOList" column="BOARD_NO" javaType="java.util.ArrayList" ofType="attachmentVO" select="getAttList" />
+	</resultMap>
+	
+	<select id="boardList" parameterType="hashMap" resultMap="boardListMap" >
+       WITH U AS (SELECT ROWNUM AS RNUM, A.*
+		            FROM ( SELECT BOARD.BOARD_NO, 
+		            		      BOARD.BOARD_TITLE, 
+		            		      BOARD.BOARD_CONTENT, 
+		            		      BOARD.BOARD_INQ_CNT, 
+		            		      BOARD.BOARD_CLFC_NO, 
+							      BOARD.MEM_ID, 
+							      BOARD.BOARD_REG_DT, 
+							      MM.MEM_NM AS BRD_NM,
+							      ATCH.ATT_NM AS BRD_ATT_NM,
+							      CASE WHEN TO_DATE(BOARD.BOARD_REG_DT, 'YYYY-MM-DD') = TO_DATE(SYSDATE, 'YYYY-MM-DD')
+							                THEN TO_CHAR(ROUND((TO_DATE(TO_CHAR(SYSDATE,'HH24:MI'), 'HH24:MI') - TO_DATE(TO_CHAR(BOARD.BOARD_REG_DT,'HH24:MI'), 'HH24:MI')) * 24, 0))
+							           ELSE TO_CHAR(BOARD.BOARD_REG_DT, 'YYYY-MM-DD')
+							      END AS BRDTIME,
+							      SUM(TRUNC((MONTHS_BETWEEN(CAREER.CRR_RTRM_DT,CAREER.CRR_JNCMP_DT))/12))+1 AS CRRYEAR, 
+							      MM.MEM_JOB AS MEM_JOB_NM
+							 FROM BOARD
+							 LEFT OUTER JOIN MEM MM ON(BOARD.MEM_ID = MM.MEM_ID)
+							 LEFT OUTER JOIN RESUME ON (MM.MEM_ID = RESUME.MEM_ID)
+							 LEFT OUTER JOIN CAREER ON (CAREER.RSM_NO = RESUME.RSM_NO)
+							 LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = MM.MEM_ID AND ATCH.ATT_CLFC_NO = 'ATTCL0005') 
+							WHERE BOARD_CLFC_NO = #{boardClfcNo}
+							GROUP BY BOARD.BOARD_NO, BOARD.BOARD_TITLE, BOARD.BOARD_CONTENT, BOARD.BOARD_INQ_CNT, BOARD.BOARD_CLFC_NO, 
+							         BOARD.MEM_ID, BOARD.BOARD_REG_DT, MM.MEM_NM, ATCH.ATT_NM, MM.MEM_JOB
+							ORDER BY BOARD.BOARD_NO DESC
+		                  ) A
+		         )
+		 SELECT U.* FROM U WHERE U.RNUM BETWEEN ( #{currentPage} * #{size} ) - ( #{size} - 1 ) AND ( #{currentPage} * #{size} )
+	</select>
+		
+	<select id="getCommentList" parameterType="String" resultType="boardCommentVO">
+		SELECT COUNT(*) AS CMNT_CNT
+		  FROM BOARD_COMMENT
+		 WHERE BOARD_NO = #{boardNo}
+	</select>
+	
+	<select id="getAttList" parameterType="String" resultType="attachmentVO">
+		SELECT ATCH.ETP_ID, ATCH.ATT_NO, ATCH.ATT_CLFC_NO, ATCH.ATT_PATH, ATCH.ATT_NM, ATCH.ATT_REG_DT
+		  FROM ATTACHMENT ATCH
+		  LEFT OUTER JOIN BOARD BRD ON (ATCH.ETP_ID = BRD.BOARD_NO)
+		 WHERE ATCH.ETP_ID = #{boardNo}
+		 ORDER BY ATCH.ATT_NO
+	</select>
+	
+	<select id="getCrrList" parameterType="String" resultType="int">
+		SELECT
+		    NVL(SUM(TRUNC((MONTHS_BETWEEN(CAREER.CRR_RTRM_DT,CAREER.CRR_JNCMP_DT))/12))+1,0)  AS CRRYEAR
+		  FROM CAREER
+		  LEFT OUTER JOIN RESUME ON (CAREER.RSM_NO = RESUME.RSM_NO)
+		  LEFT OUTER JOIN MEM ON (MEM.MEM_ID = RESUME.MEM_ID)
+		 WHERE MEM.MEM_ID = #{memId}
+	</select>
+		
+	<!-- 총 게시글-->
+	<select id="getTotal" parameterType="hashMap" resultType="int">
+		SELECT COUNT(*) FROM BOARD
+		WHERE 1=1
+		  AND BOARD_CLFC_NO = #{boardClfcNo}
+		<if test="keyword != null and keyword != ''">
+			AND (BOARD_TITLE LIKE '%' || #{keyword} || '%'
+		     OR BOARD_CONTENT LIKE '%' || #{keyword} || '%')
+		</if>
+	</select>
+	
+	
+	<!-- 게시글 등록 -->
+	<insert id="boardInsert" parameterType="boardVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="boardNo">
+			SELECT NVL(SUBSTR(MAX(BOARD_NO), 1, 3) || TRIM(TO_CHAR(SUBSTR(MAX(BOARD_NO), 4)+1,'0000')),'BRD0001') FROM BOARD
+		</selectKey>
+		
+		INSERT INTO BOARD (BOARD_NO, BOARD_TITLE, BOARD_CONTENT, BOARD_INQ_CNT, BOARD_REG_DT, BOARD_CLFC_NO, MEM_ID)
+		VALUES (#{boardNo}, #{boardTitle}, #{boardContent}, 0, SYSDATE, #{boardClfcNo}, #{memId} )
+	</insert>
+
+
+	<!-- 게시글 상세조회 -->
+	<resultMap type="boardVO" id="boardMap">
+		<result property="boardNo" column="BOARD_NO"/>
+		<result property="boardClfcNo" column="BOARD_CLFC_NO"/>
+		<result property="memNm" column="BRD_NM"/>
+		<result property="memId" column="MEM_ID"/>
+		<result property="boardTitle" column="BOARD_TITLE"/>
+		<result property="boardContent" column="BOARD_CONTENT"/>
+		<result property="boardInqCnt" column="BOARD_INQ_CNT"/>
+		<result property="boardRegDt" column="BOARD_REG_DT" />
+		<result property="cmntCnt" column="CMNT_CNT" />
+		<result property="prevNo" column="PREV_NO" />
+		<result property="prevTitle" column="PREV_TITLE" />
+		<result property="nextNo" column="NEXT_NO" />
+		<result property="nextTitle" column="NEXT_TITLE" />
+		<collection property="boardCmntVOList" column="BOARD_NO" javaType="java.util.ArrayList" ofType="boardCommentVO" select="getCommentListById" />
+		<collection property="boardAttVOList" column="BOARD_NO" javaType="java.util.ArrayList" ofType="attachmentVO" select="getAttListById" />
+	</resultMap>
+
+	<select id="boardDetail" parameterType="boardVO" resultMap="boardMap">
+		 WITH U AS(SELECT BRD.BOARD_NO, BRD.BOARD_CLFC_NO, BRD.MEM_ID, M.MEM_NM AS BRD_NM, BRD.BOARD_TITLE, BRD.BOARD_CONTENT, BRD.BOARD_INQ_CNT, BRD.BOARD_REG_DT, CMNT.CMNT_CNT
+		     , LAG(BRD.BOARD_NO, 1) OVER(ORDER BY BRD.BOARD_NO)  AS PREV_NO
+		     , LAG(BRD.BOARD_TITLE, 1) OVER(ORDER BY BRD.BOARD_NO)  AS PREV_TITLE
+		     , LEAD(BRD.BOARD_NO, 1) OVER(ORDER BY BRD.BOARD_NO) AS NEXT_NO
+		     , LEAD(BRD.BOARD_TITLE, 1) OVER(ORDER BY BRD.BOARD_NO) AS NEXT_TITLE
+		  FROM BOARD BRD
+		  LEFT OUTER JOIN MEM M ON (BRD.MEM_ID = M.MEM_ID)
+		  LEFT OUTER JOIN (SELECT COUNT(*) AS CMNT_CNT, BOARD_NO FROM BOARD_COMMENT WHERE BOARD_NO = #{boardNo} GROUP BY BOARD_NO ) CMNT ON (BRD.BOARD_NO = CMNT.BOARD_NO)
+		  ORDER BY BRD.BOARD_NO
+		  )
+		SELECT U.* FROM U WHERE U.BOARD_NO = #{boardNo}
+	</select>
+	
+	<select id="getCommentListById" parameterType="String" resultType="boardCommentVO">
+		  SELECT CMNT.CMNT_NO, CMNT.CMNT_CONTENT, CMNT.CMNT_REG_DT, CMNT.MEM_ID, M.MEM_NM,
+			     ATCH.ATT_NM
+			FROM BOARD_COMMENT CMNT
+			LEFT OUTER JOIN MEM M ON (CMNT.MEM_ID = M.MEM_ID)
+			LEFT OUTER JOIN ATTACHMENT ATCH ON (ATCH.ETP_ID = M.MEM_ID  AND ATCH.ATT_CLFC_NO = 'ATTCL0005') 
+		   WHERE CMNT.BOARD_NO = #{boardNo}
+		   ORDER BY CMNT.CMNT_NO
+	</select>
+	
+	<select id="getAttListById" parameterType="String" resultType="attachmentVO">
+		SELECT ATCH.ETP_ID, ATCH.ATT_NO, ATCH.ATT_CLFC_NO, ATCH.ATT_PATH, ATCH.ATT_NM, ATCH.ATT_REG_DT
+		  FROM ATTACHMENT ATCH
+		  LEFT OUTER JOIN BOARD BRD ON (ATCH.ETP_ID = BRD.BOARD_NO)
+		 WHERE ATCH.ETP_ID = #{boardNo}
+		 ORDER BY ATCH.ATT_NO
+	</select>
+	
+	
+	<!-- 게시글 삭제 -->
+	<delete id="boardDelete" parameterType="boardVO">
+		DELETE FROM BOARD WHERE BOARD_NO = #{boardNo}
+	</delete>
+	
+	
+	<!-- 게시글 수정 -->
+	<update id="boardUpdate" parameterType="boardVO">
+		UPDATE BOARD SET BOARD_TITLE = #{boardTitle}, BOARD_CONTENT = #{boardContent}
+		 WHERE BOARD_NO = #{boardNo}
+	</update>
+
+	
+	
+	
+	<!-- 댓글 -->
+	<!-- 댓글 -->
+	<!-- 댓글 -->
+		
+		
+	<!-- 댓글 등록 -->
+	<insert id="boardCommentInsert" parameterType="boardCommentVO">
+		<selectKey resultType="String" order="BEFORE" keyProperty="cmntNo">
+			SELECT NVL(SUBSTR(MAX(CMNT_NO), 1, 4) || TRIM(TO_CHAR(SUBSTR(MAX(CMNT_NO), 5)+1,'0000')),'CMNT0001') FROM BOARD_COMMENT
+		</selectKey>
+		
+		INSERT INTO BOARD_COMMENT (CMNT_NO, BOARD_NO, MEM_ID, CMNT_CONTENT, CMNT_REG_DT)
+		VALUES (#{cmntNo}, #{boardNo}, #{memId}, #{cmntContent}, SYSDATE)
+	</insert>
+	
+	
+	<!-- 댓글 삭제 -->
+	<delete id="boardCommentDelete" parameterType="boardCommentVO">
+		DELETE FROM BOARD_COMMENT WHERE CMNT_NO = #{cmntNo}
+	</delete>
+	
+	
+	<!-- 댓글 수정 -->
+	<update id="boardCommentUpdate" parameterType="boardCommentVO">
+		UPDATE BOARD_COMMENT SET CMNT_CONTENT = #{cmntContent} WHERE CMNT_NO = #{cmntNo}
+	</update>
+	
+	
+	<!-- 댓글 총 갯수 -->
+	<select id="getCmntCount" resultType="int">
+		SELECT COUNT(*) FROM BOARD_COMMENT WHERE BOARD_NO = #{boardNo}
+	</select>
+</mapper>
